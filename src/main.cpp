@@ -169,9 +169,9 @@ int main() {
 		cout<<top_left<<", "<<top_right<<", "<<", "<<bottom_left<<", "<<bottom_right <<endl;
 
 		/// Show in a window
-		namedWindow("Contours", CV_WINDOW_AUTOSIZE);
-		imshow("Contours", drawing);
-		waitKey(0);
+//		namedWindow("Contours", CV_WINDOW_AUTOSIZE);
+//		imshow("Contours", drawing);
+//		waitKey(0);
 
 		silhouettes.push_back(binaryMat);
 
@@ -208,50 +208,60 @@ int main() {
 		fid.push_back(linedata[i]);
 		i++;
 		//Put data into K
-		Mat kk(3, 3, cv::DataType<float>::type, Scalar(1));
+//		Mat kk(3, 3, cv::DataType<float>::type, Scalar(1));
+//		for (int j = 0; j < 3; j++) {
+//			for (int k = 0; k < 3; k++) {
+//				float temp = strtof((linedata[i]).c_str(), 0);
+//
+//				kk.at<float>(j, k) = temp;
+//				i++;
+//			}
+//		}
+//		K.push_back(kk);
+//
+//		Mat Rttemp(3, 4, cv::DataType<float>::type, Scalar(1));
+//		for (int j = 0; j < 3; j++) {
+//			for (int k = 0; k < 3; k++) {
+//				float temp = strtof((linedata[i]).c_str(), 0);
+//
+//				Rttemp.at<float>(j, k) = temp;
+//				i++;
+//			}
+//		}
+//		int k = 3;
+//		for (int j = 0; j < 3; j++) {
+//			float temp = strtof((linedata[i]).c_str(), 0);
+//			Rttemp.at<float>(j, k) = temp;
+//			i++;
+//		}
+//		Rt.push_back(Rttemp);
+		Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
 		for (int j = 0; j < 3; j++) {
-			for (int k = 0; k < 3; k++) {
+			for (int k = 0; k < 4; k++) {
 				float temp = strtof((linedata[i]).c_str(), 0);
 
-				kk.at<float>(j, k) = temp;
+				P.at<float>(j, k) = temp;
 				i++;
 			}
 		}
-		K.push_back(kk);
-
-		Mat Rttemp(3, 4, cv::DataType<float>::type, Scalar(1));
-		for (int j = 0; j < 3; j++) {
-			for (int k = 0; k < 3; k++) {
-				float temp = strtof((linedata[i]).c_str(), 0);
-
-				Rttemp.at<float>(j, k) = temp;
-				i++;
-			}
-		}
-		int k = 3;
-		for (int j = 0; j < 3; j++) {
-			float temp = strtof((linedata[i]).c_str(), 0);
-			Rttemp.at<float>(j, k) = temp;
-			i++;
-		}
-		Rt.push_back(Rttemp);
+		M.push_back(P);
 
 	}
 
-	// Compute M's
-	for (int i = 0; i < N; i++) {
+//	// Compute M's
+//	for (int i = 0; i < N; i++) {
+//
+//		Mat Mtemp = K[i] * Rt[i];
+//		M.push_back(Mtemp);
+//
+//	}
 
-		Mat Mtemp = K[i] * Rt[i];
-		M.push_back(Mtemp);
-
-	}
-
-	Vec3d voxel_size(0.001, 0.001, 0.001);		//resolution
+	Vec3d voxel_size(0.01, 0.01, 0.01);	//resolution
 
 	//Bounding box for DinoSR
-	Vec2d xlim(-0.07, 0.02);
-	Vec2d ylim(-0.02, 0.07);
-	Vec2d zlim(-0.07, 0.02);
+	Vec2d xlim(-0.31, 1.05);
+	Vec2d ylim(-1.69, -1.13);
+	Vec2d zlim(-0.29, 2.05);
 
 	//BB for templeRing
 //	Vec2d xlim(-0.05, 0.11);
@@ -425,7 +435,7 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 
 	dim[0] = voxel_number[0] + 1;
 	dim[1] = voxel_number[1] + 1;
-	dim[2] = voxel_number[2] + 1;
+	dim[2] = voxel_number[2] + 2;
 
 	cout << dim[0] << endl;
 
@@ -554,17 +564,19 @@ Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel) {
 	sz = 0;
 	ez = voxel_number[2] * voxel_size[2];
 
+	cout<<dim[0]<<", "<<dim[1]<<", "<<dim[2]<<endl;
+
 	l = 0;
 	z1 = 0;
 	int j = 0;
 	while (l < total_number) {
 		//z1=0;
-		for (z1 = 0; z1 < dim[2]; z1++) {
+		for (z1 = 0; z1 < dim[2]+1; z1++) {
 			for (x1 = 0; x1 < dim[0]; x1++) {
 				for (y1 = 0; y1 < dim[1]; y1++) {
 					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
 
-					if (voxel3D.at<float>(x1, y1, z1) >= 13.5)
+					if (voxel3D.at<float>(x1, y1, z1) >= 7.5)
 						j++;
 					l++;
 				}
