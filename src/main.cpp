@@ -18,9 +18,9 @@ using namespace std;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 5;			//number of frames
+int F = 45;			//number of frames
 int dim[3];
-int decPoint = 1 / 0.1;
+int decPoint = 1 / 0.01;
 ////for bounding box computation
 
 typedef struct {
@@ -161,7 +161,7 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 
 int main() {
 
-	for (int countFrame = 3; countFrame < F; countFrame++) {
+	for (int countFrame = 40; countFrame < F; countFrame++) {
 		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
@@ -469,7 +469,7 @@ int main() {
 				<< endl;
 
 		//Set resolution after BB calculation
-		Vec3f voxel_size(0.1, 0.1, 0.1);	//resolution
+		Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
 
 		//initialize voxels
 		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
@@ -568,32 +568,56 @@ int main() {
 		////for outputting in .off file
 		string outputfilename = "output/output" + to_string(countFrame)
 				+ ".off";
-		if ((fptr = fopen("output/output.off", "w")) == NULL) {
-			fprintf(stderr, "Failed to open .off file!\n");
-			exit(-1);
-		}
+//		cout<<outputfilename<<endl;
+//
+//		if ((fptr = fopen("output/output.off", "w")) == NULL) {
+//			fprintf(stderr, "Failed to open .off file!\n");
+//			exit(-1);
+//		}
+//
+//		int numVerts = ntri * 3;
+//		cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
+//
+//		fprintf(fptr, "OFF\n");
+//		fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
+//
+//		for (i = 0; i < ntri; i++) {
+//			for (k = 0; k < 3; k++) {
+//				fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
+//						tri[i].p[k].z);
+//			}
+//		}
+//		int vertCount = 0;
+//		for (i = 0; i < ntri; i++) {
+//			fprintf(fptr, "3 ");
+//			fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1,
+//					vertCount + 2);
+//			vertCount += 3;
+//		}
+//
+//		fclose(fptr);
+//		printf("Output wrote in .off format!\n");
 
+		/////
+		ofstream myfile;
+		myfile.open(outputfilename);
 		int numVerts = ntri * 3;
-		cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
 
-		fprintf(fptr, "OFF\n");
-		fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
-
+		myfile << "OFF\n";
+		myfile << numVerts<<" "<< ntri<<" "<< 0<<"\n";
 		for (i = 0; i < ntri; i++) {
 			for (k = 0; k < 3; k++) {
-				fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
-						tri[i].p[k].z);
+				myfile << tri[i].p[k].x<<" "<< tri[i].p[k].y<<" "<<tri[i].p[k].z<<"\n";
 			}
 		}
 		int vertCount = 0;
 		for (i = 0; i < ntri; i++) {
-			fprintf(fptr, "3 ");
-			fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1,
-					vertCount + 2);
+			myfile<<"3 ";
+			myfile<< vertCount<<" " <<vertCount + 1<<" "<<vertCount + 2<<"\n";
 			vertCount += 3;
 		}
 
-		fclose(fptr);
+		myfile.close();
 		printf("Output wrote in .off format!\n");
 	}
 
