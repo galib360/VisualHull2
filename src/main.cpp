@@ -52,19 +52,23 @@ Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
 int main() {
 
 	for (int countFrame = 0; countFrame < F; countFrame++) {
+		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
-		vector<cv::Mat> M; 	//params
-		vector<cv::Mat> silhouettes;
-		cv::String path("dancer/*.pbm");
-		vector<cv::String> fn;
-		vector<cv::Mat> imageData;
-
+		vector<Mat> M; 	//params
+		vector<Mat> silhouettes;
+		vector<Mat> imageData;
 		vector<Vec4d> voxels;
-		cv::glob(path, fn, true); // recurse
 
-		for (size_t k = 0; k < fn.size(); ++k) {
-			cv::Mat im = cv::imread(fn[k]);
+		for (int countView = 0; countView < N; countView++) {
+
+			cv::String path("data/cam0" + to_string(countView) + "/*.pbm");
+			cout << path << endl;
+			vector<String> fn;
+			cv::glob(path, fn, true); // recurse
+
+			cv::Mat im = cv::imread(fn[countFrame]);
+			//cout << fn[countFrame] << endl;
 
 			if (im.empty())
 				continue; //only proceed if sucsessful
@@ -155,57 +159,63 @@ int main() {
 			Point bottom_right(x + width, y + height);
 
 			/// Show in a window
-			//		namedWindow("Contours", CV_WINDOW_AUTOSIZE);
-			//		imshow("Contours", drawing);
-			//		waitKey(0);
+//						namedWindow("Contours", CV_WINDOW_AUTOSIZE);
+//						imshow("Contours", drawing);
+//						waitKey(0);
 
 			silhouettes.push_back(binaryMat);
+
+			vector<string> fid;
+
+			std::ifstream txtfile(
+					"data/cam0" + to_string(countView) + "/cam_par.txt");
+			cout << "data/cam0" + to_string(countView) + "/cam_par.txt" << endl;
+			//std::ifstream txtfile("templeSR/templeSR_par.txt");
+			std::string line;
+			vector<string> linedata;
+			//std::getline(txtfile, line);
+			//cout<<line<<endl;
+			//std::stringstream linestream(line);
+
+//			int value;
+			int i = 0;
+
+//			while (linestream >> value) {
+//				N = value;
+//			}
+
+			while (std::getline(txtfile, line)) {
+				std::stringstream linestream(line);
+				string val;
+				while (linestream >> val) {
+					linedata.push_back(val);
+					//cout<<val<<endl;
+				}
+			}
+			while (i < linedata.size()) {
+				fid.push_back(linedata[i]);
+				i++;
+
+				Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
+				for (int j = 0; j < 3; j++) {
+					for (int k = 0; k < 4; k++) {
+						float temp = strtof((linedata[i]).c_str(), 0);
+
+						P.at<float>(j, k) = temp;
+						i++;
+					}
+				}
+				M.push_back(P);
+				//cout<<"camera"<<countView<<": "<<M[countView]<<endl;
+
+			}
 
 		}
 
 		//Read Camera Params from text file ***************************************************
 
-		vector<cv::Mat> K;
-		vector<cv::Mat> Rt;
-
-		vector<string> fid;
-
-		std::ifstream txtfile("dancer/dancer_par.txt");
-		//std::ifstream txtfile("templeSR/templeSR_par.txt");
-		std::string line;
-		vector<string> linedata;
-		std::getline(txtfile, line);
-		std::stringstream linestream(line);
-		int value;
-		int i = 0;
-
-		while (linestream >> value) {
-			N = value;
-		}
-
-		while (std::getline(txtfile, line)) {
-			std::stringstream linestream(line);
-			string val;
-			while (linestream >> val) {
-				linedata.push_back(val);
-			}
-		}
-		while (i < linedata.size()) {
-			fid.push_back(linedata[i]);
-			i++;
-
-			Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
-			for (int j = 0; j < 3; j++) {
-				for (int k = 0; k < 4; k++) {
-					float temp = strtof((linedata[i]).c_str(), 0);
-
-					P.at<float>(j, k) = temp;
-					i++;
-				}
-			}
-			M.push_back(P);
-
-		}
+//		vector<cv::Mat> K;
+//		vector<cv::Mat> Rt;
 
 		//Bounding box Calculation here
 		Vec2d xlim(-0.31, 1.05);
@@ -230,7 +240,7 @@ int main() {
 		for (int i = 0; i < total_number; i++) {
 			if (voxels_voted.at<float>(i, 3) > maxv) {
 				maxv = voxels_voted.at<float>(i, 3);
-				//cout << "maxv updated, now: " << maxv << endl;
+				cout << "maxv updated, now: " << maxv << endl;
 			} else if (voxels_voted.at<float>(i, 3) < minv) {
 				minv = voxels_voted.at<float>(i, 3);
 			}
@@ -238,7 +248,7 @@ int main() {
 
 		float iso_value = maxv - round((maxv / 100) * error) - 0.5;
 
-		int j, k, l, n;
+		int i, j, k, l, n;
 
 		short int data[dim[0]][dim[1]][dim[2]];
 
@@ -311,7 +321,7 @@ int main() {
 
 		////for outputting in .off file
 
-		if ((fptr = fopen("output2.off", "w")) == NULL) {
+		if ((fptr = fopen("mesh2.off", "w")) == NULL) {
 			fprintf(stderr, "Failed to open .off file!\n");
 			exit(-1);
 		}
@@ -421,9 +431,11 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 	int num = 0;
 
 	while (num < N) {
+		//cout<<M[0].at<float>(0,1)<<endl;
 		Mat camParam = M[num];
 
 		Mat curr_sil = silhouettes[num];
+
 		Mat curr_sil_bin(imgH, imgW, CV_32F);
 
 		int count1 = 0;
@@ -498,7 +510,7 @@ Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
 	int j = 0;
 	while (l < total_number) {
 		//z1=0;
-		for (z1 = 0; z1 < dim[2] + 1; z1++) {
+		for (z1 = 0; z1 < dim[2]; z1++) {
 			for (x1 = 0; x1 < dim[0]; x1++) {
 				for (y1 = 0; y1 < dim[1]; y1++) {
 					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
