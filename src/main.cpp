@@ -11,13 +11,123 @@
 #include <math.h>
 #include <cstdlib>
 
+#define PI 3.14159265
+
 using namespace cv;
 using namespace std;
 
-Vec3d voxel_number;
+Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 1;			//number of frames
+int F = 5;			//number of frames
 int dim[3];
+int decPoint = 1 / 0.1;
+////for bounding box computation
+
+typedef struct {
+	vector<Point2f> pnts2d;
+} campnts;
+
+typedef struct {
+	float x, y, z;
+} Vector3f;
+
+Vector3f Normalize(const Vector3f &V) {
+	float Len = sqrt(V.x * V.x + V.y * V.y + V.z * V.z);
+	if (Len == 0.0f) {
+		return V;
+	} else {
+		float Factor = 1.0f / Len;
+		Vector3f result;
+		result.x = V.x * Factor;
+		result.y = V.y * Factor;
+		result.z = V.z * Factor;
+		//return Vector3f(V.x * Factor, V.y * Factor, V.z * Factor);
+		return result;
+	}
+}
+
+float Dot(const Vector3f &Left, const Vector3f &Right) {
+	return (Left.x * Right.x + Left.y * Right.y + Left.z * Right.z);
+}
+
+Vector3f Cross(const Vector3f &Left, const Vector3f &Right) {
+	Vector3f Result;
+	Result.x = Left.y * Right.z - Left.z * Right.y;
+	Result.y = Left.z * Right.x - Left.x * Right.z;
+	Result.z = Left.x * Right.y - Left.y * Right.x;
+	return Result;
+}
+
+Vector3f operator *(const Vector3f &Left, float Right) {
+	Vector3f result;
+	result.x = Left.x * Right;
+	result.y = Left.y * Right;
+	result.z = Left.z * Right;
+	return result;
+}
+
+Vector3f operator *(float Left, const Vector3f &Right) {
+
+	Vector3f result;
+	result.x = Right.x * Left;
+	result.y = Right.y * Left;
+	result.z = Right.z * Left;
+	return result;
+
+}
+
+Vector3f operator /(const Vector3f &Left, float Right) {
+
+	Vector3f result;
+	result.x = Left.x / Right;
+	result.y = Left.y / Right;
+	result.z = Left.z / Right;
+	return result;
+
+}
+
+Vector3f operator +(const Vector3f &Left, const Vector3f &Right) {
+
+	Vector3f result;
+	result.x = Left.x + Right.x;
+	result.y = Left.y + Right.y;
+	result.z = Left.z + Right.z;
+	return result;
+}
+
+Vector3f operator -(const Vector3f &Left, const Vector3f &Right) {
+	Vector3f result;
+	result.x = Left.x - Right.x;
+	result.y = Left.y - Right.y;
+	result.z = Left.z - Right.z;
+	return result;
+}
+
+Vector3f operator -(const Vector3f &V) {
+	Vector3f result;
+	result.x = -V.x;
+	result.y = -V.y;
+	result.z = -V.z;
+	return result;
+}
+
+typedef struct {
+	float a, b, c, d;
+	Vector3f normal;
+} Plane;
+
+Plane ConstructFromPointNormal(const Vector3f &Pt, const Vector3f &Normal) {
+	Plane Result;
+	Vector3f NormalizedNormal = Normalize(Normal);
+	Result.a = NormalizedNormal.x;
+	Result.b = NormalizedNormal.y;
+	Result.c = NormalizedNormal.z;
+	//Result.d = -Dot(Pt, NormalizedNormal);
+	Result.d = Dot(Pt, NormalizedNormal);
+	//Result.normal = Normal;
+	Result.normal = NormalizedNormal;
+	return Result;
+}
 
 ////from example MC
 typedef struct {
@@ -42,16 +152,16 @@ typedef struct {
 int PolygoniseCube(GRIDCELL, double, TRIANGLE *);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
-Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
+Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M);
 
-Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
+Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number);
 
 int main() {
 
-	for (int countFrame = 0; countFrame < F; countFrame++) {
+	for (int countFrame = 3; countFrame < F; countFrame++) {
 		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
@@ -60,10 +170,25 @@ int main() {
 		vector<Mat> imageData;
 		vector<Vec4d> voxels;
 
+		vector<campnts> pnts;
+		vector<Mat> points3D;
+
+		vector<Mat> cameraPos;
+		vector<Mat> K;
+		vector<Mat> Rt;
+		vector<Mat> R;
+		vector<Mat> Rvec;
+		vector<Mat> t;
+
+		vector<Vector3f> cameraOrigins;
+		vector<Vector3f> planeNormals;
+		vector<Plane> cameraPlanes;
+		vector<Point> midpoints;
+
 		for (int countView = 0; countView < N; countView++) {
 
 			cv::String path("data/cam0" + to_string(countView) + "/*.pbm");
-			cout << path << endl;
+			//cout << path << endl;
 			vector<String> fn;
 			cv::glob(path, fn, true); // recurse
 
@@ -153,10 +278,17 @@ int main() {
 			int width = test.width;
 			int height = test.height;
 			// Now with those parameters you can calculate the 4 points
-			Point top_left(x, y);
-			Point top_right(x + width, y);
-			Point bottom_left(x, y + height);
-			Point bottom_right(x + width, y + height);
+			Point2f top_left(x, y);
+			Point2f top_right(x + width, y);
+			Point2f bottom_left(x, y + height);
+			Point2f bottom_right(x + width, y + height);
+			campnts camerapnts;
+			camerapnts.pnts2d.push_back(top_left);
+			camerapnts.pnts2d.push_back(top_right);
+			camerapnts.pnts2d.push_back(bottom_left);
+			camerapnts.pnts2d.push_back(bottom_right);
+
+			pnts.push_back(camerapnts);
 
 			/// Show in a window
 //						namedWindow("Contours", CV_WINDOW_AUTOSIZE);
@@ -169,7 +301,7 @@ int main() {
 
 			std::ifstream txtfile(
 					"data/cam0" + to_string(countView) + "/cam_par.txt");
-			cout << "data/cam0" + to_string(countView) + "/cam_par.txt" << endl;
+			//cout << "data/cam0" + to_string(countView) + "/cam_par.txt" << endl;
 			//std::ifstream txtfile("templeSR/templeSR_par.txt");
 			std::string line;
 			vector<string> linedata;
@@ -206,6 +338,42 @@ int main() {
 					}
 				}
 				M.push_back(P);
+
+				Mat rotm, tvec, kk;
+				decomposeProjectionMatrix(P, kk, rotm, tvec);
+				K.push_back(kk);
+				//		cout << kk << endl << endl;
+				R.push_back(rotm);
+				Mat ttemp(3, 1, cv::DataType<float>::type, Scalar(1));
+				float temp4 = tvec.at<float>(3, 0);
+				ttemp.at<float>(0, 0) = tvec.at<float>(0, 0) / temp4;
+				ttemp.at<float>(1, 0) = tvec.at<float>(1, 0) / temp4;
+				ttemp.at<float>(2, 0) = tvec.at<float>(2, 0) / temp4;
+
+				t.push_back(ttemp);
+
+				//Mat cameraPosition = -R[i].t() * t[i];
+				Mat Rtrans = rotm.t();
+				Mat cameraPosition = ttemp;
+				//Mat Rtrans = rotm;
+
+				Vector3f cameraOrigin;
+				cameraOrigin.x = cameraPosition.at<float>(0, 0);
+				cameraOrigin.y = cameraPosition.at<float>(0, 1);
+				cameraOrigin.z = cameraPosition.at<float>(0, 2);
+
+				Vector3f planeNormal;
+				planeNormal.x = Rtrans.at<float>(0, 2);
+				planeNormal.y = Rtrans.at<float>(1, 2);
+				planeNormal.z = Rtrans.at<float>(2, 2);
+
+				Plane cameraPlane = ConstructFromPointNormal(cameraOrigin,
+						planeNormal);
+
+				cameraOrigins.push_back(cameraOrigin);
+				planeNormals.push_back(planeNormal);
+				cameraPlanes.push_back(cameraPlane);
+
 				//cout<<"camera"<<countView<<": "<<M[countView]<<endl;
 
 			}
@@ -218,12 +386,90 @@ int main() {
 //		vector<cv::Mat> Rt;
 
 		//Bounding box Calculation here
-		Vec2d xlim(-0.31, 1.05);
-		Vec2d ylim(-1.69, -1.13);
-		Vec2d zlim(-0.29, 2.05);
+		float xmin = 100;
+		float xmax = -100;
+		float ymin = 100;
+		float ymax = -100;
+		float zmin = 100;
+		float zmax = -100;
+
+		for (int a = 0; a < N - 1; a++) {
+
+			///check the angle here before calculation
+			float dot = Dot(planeNormals[a], planeNormals[a + 1]);
+			float lensq1 = (planeNormals[a].x * planeNormals[a].x)
+					+ (planeNormals[a].y * planeNormals[a].y)
+					+ (planeNormals[a].z * planeNormals[a].z);
+			float lensq2 = (planeNormals[a + 1].x * planeNormals[a + 1].x)
+					+ (planeNormals[a + 1].y * planeNormals[a + 1].y)
+					+ (planeNormals[a + 1].z * planeNormals[a + 1].z);
+			float angle = acos(dot / sqrt(lensq1 * lensq2));
+			float angleD = angle * 180.0 / PI;
+
+			cout << "Angle in radian : " << angle << ", in Degree : " << angleD
+					<< endl;
+
+			if (angleD < 45) {
+				Mat temp(4, pnts[0].pnts2d.size(), CV_32F);
+				//triangulatePoints(M[0], M[a+1], pnts[0].pnts2d, pnts[a+1].pnts2d, temp);
+				triangulatePoints(M[a], M[a + 1], pnts[a].pnts2d,
+						pnts[a + 1].pnts2d, temp);
+				//temp = temp.t();
+				for (int k = 0; k < temp.cols; k++) {
+					for (int k = 0; k < temp.cols; k++) {
+						for (int j = 0; j < 4; j++) {
+							temp.at<float>(j, k) = temp.at<float>(j, k)
+									/ temp.at<float>(3, k);
+							if (j == 0) {
+								if (temp.at<float>(j, k) < xmin) {
+									xmin = temp.at<float>(j, k);
+									xmin = ceilf(xmin * decPoint) / decPoint;
+								}
+								if (temp.at<float>(j, k) > xmax) {
+									xmax = temp.at<float>(j, k);
+									xmax = ceilf(xmax * decPoint) / decPoint;
+								}
+							} else if (j == 1) {
+								if (temp.at<float>(j, k) < ymin) {
+									ymin = temp.at<float>(j, k);
+									ymin = ceilf(ymin * decPoint) / decPoint;
+								}
+								if (temp.at<float>(j, k) > ymax) {
+									ymax = temp.at<float>(j, k);
+									ymax = ceilf(ymax * decPoint) / decPoint;
+								}
+							} else if (j == 2) {
+								if (temp.at<float>(j, k) < zmin) {
+									zmin = temp.at<float>(j, k);
+									zmin = ceilf(zmin * decPoint) / decPoint;
+								}
+								if (temp.at<float>(j, k) > zmax) {
+									zmax = temp.at<float>(j, k);
+									zmax = ceilf(zmax * decPoint) / decPoint;
+								}
+							}
+						}
+					}
+				}
+				points3D.push_back(temp);
+				//cout << temp << endl;
+			}
+		}
+
+		Vec2f xlim(xmin, xmax);
+		Vec2f ylim(ymin, ymax);
+		Vec2f zlim(zmin, zmax);
+//		Vec2f xlim(-0.31, 1.05);
+//		Vec2f ylim(-1.69, -1.13);
+//		Vec2f zlim(-0.29, 2.05);
+
+		cout << "min is: [ " << xmin << ", " << ymin << ", " << zmin << " ]"
+				<< endl;
+		cout << "max is: [ " << xmax << ", " << ymax << ", " << zmax << " ]"
+				<< endl;
 
 		//Set resolution after BB calculation
-		Vec3d voxel_size(0.01, 0.01, 0.01);	//resolution
+		Vec3f voxel_size(0.1, 0.1, 0.1);	//resolution
 
 		//initialize voxels
 		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
@@ -320,8 +566,9 @@ int main() {
 		}
 
 		////for outputting in .off file
-
-		if ((fptr = fopen("mesh2.off", "w")) == NULL) {
+		string outputfilename = "output/output" + to_string(countFrame)
+				+ ".off";
+		if ((fptr = fopen("output/output.off", "w")) == NULL) {
 			fprintf(stderr, "Failed to open .off file!\n");
 			exit(-1);
 		}
@@ -353,7 +600,7 @@ int main() {
 	return 0;
 }
 
-Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
+Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M) {
 
@@ -488,7 +735,7 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 
 }
 
-Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
+Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number) {
 
 	Mat voxel3D(3, dim, CV_32FC1, Scalar(0));
@@ -507,16 +754,15 @@ Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
 
 	l = 0;
 	z1 = 0;
-	int j = 0;
+//	cout<<"problem here: "<<voxel.at<float>(185312, 3)<<endl;
+//	cout<<voxel3D.at<float>(27, 39, 237)<<endl;
 	while (l < total_number) {
 		//z1=0;
 		for (z1 = 0; z1 < dim[2]; z1++) {
 			for (x1 = 0; x1 < dim[0]; x1++) {
 				for (y1 = 0; y1 < dim[1]; y1++) {
-					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
 
-					if (voxel3D.at<float>(x1, y1, z1) >= 7.5)
-						j++;
+					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
 					l++;
 				}
 			}
