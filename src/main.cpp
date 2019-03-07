@@ -15,10 +15,8 @@ using namespace cv;
 using namespace std;
 
 Vec3d voxel_number;
-int N;
-int total_number;
-vector<cv::Mat> M; //params
-vector<cv::Mat> silhouettes;
+int N = 8;			//how many cameras/views
+int F = 1;			//number of frames
 int dim[3];
 
 ////from example MC
@@ -45,356 +43,309 @@ int PolygoniseCube(GRIDCELL, double, TRIANGLE *);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
 Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
-		vector<Vec4d> voxels);
+		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
+		vector<Mat>& M);
 
-Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel);
+Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
+		int& total_number);
 
 int main() {
 
-	//cv::String path("dinoSR/*.png"); //select only png
-	//cv::String path("templeSR/*.png");
-	cv::String path("dancer/*.pbm");
-	vector<cv::String> fn;
-	vector<cv::Mat> imageData;
+	for (int countFrame = 0; countFrame < F; countFrame++) {
 
-	vector<Vec4d> voxels;
-	cv::glob(path, fn, true); // recurse
+		int total_number;	//bounding volumes's prod(dims)
+		vector<cv::Mat> M; 	//params
+		vector<cv::Mat> silhouettes;
+		cv::String path("dancer/*.pbm");
+		vector<cv::String> fn;
+		vector<cv::Mat> imageData;
 
-	for (size_t k = 0; k < fn.size(); ++k) {
-		cv::Mat im = cv::imread(fn[k]);
-		//imshow( "k", im );
-		if (im.empty())
-			continue; //only proceed if sucsessful
+		vector<Vec4d> voxels;
+		cv::glob(path, fn, true); // recurse
 
-		imageData.push_back(im);
+		for (size_t k = 0; k < fn.size(); ++k) {
+			cv::Mat im = cv::imread(fn[k]);
 
-		Vec3b bgcolor = im.at<Vec3b>(Point(1, 1));
+			if (im.empty())
+				continue; //only proceed if sucsessful
 
-		// Change the background from white to black, since that will help later to extract
-		// better results during the use of Distance Transform
-		for (int x = 0; x < im.rows; x++) {
-			for (int y = 0; y < im.cols; y++) {
-				if (im.at<Vec3b>(x, y) == bgcolor) {
-					im.at<Vec3b>(x, y)[0] = 0;
-					im.at<Vec3b>(x, y)[1] = 0;
-					im.at<Vec3b>(x, y)[2] = 0;
-					//cout<<bgcolor<<endl;
+			imageData.push_back(im);
+
+			//Compute sils
+
+			Vec3b bgcolor = im.at<Vec3b>(Point(1, 1));
+
+			for (int x = 0; x < im.rows; x++) {
+				for (int y = 0; y < im.cols; y++) {
+					if (im.at<Vec3b>(x, y) == bgcolor) {
+						im.at<Vec3b>(x, y)[0] = 0;
+						im.at<Vec3b>(x, y)[1] = 0;
+						im.at<Vec3b>(x, y)[2] = 0;
+
+					}
 				}
 			}
-		}
 
-		// without watershed
-		//Grayscale matrix
-		cv::Mat grayscaleMat(im.size(), CV_8U);
+			// without watershed
+			//Grayscale matrix
+			cv::Mat grayscaleMat(im.size(), CV_8U);
 
-		//Convert BGR to Gray
-		cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY);
+			//Convert BGR to Gray
+			cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY);
 
-		//Binary image
-		cv::Mat binaryMat(grayscaleMat.size(), grayscaleMat.type());
+			//Binary image
+			cv::Mat binaryMat(grayscaleMat.size(), grayscaleMat.type());
 
-		//Apply thresholding
-		cv::threshold(grayscaleMat, binaryMat, 20, 255, cv::THRESH_BINARY);
+			//Apply thresholding
+			cv::threshold(grayscaleMat, binaryMat, 20, 255, cv::THRESH_BINARY);
 
-		//Show the results
-		//cv::namedWindow("silhouettes", cv::WINDOW_AUTOSIZE);
-		//cv::imshow("sil", binaryMat);
-		//waitKey(0);
+			//Show the results
+			//cv::namedWindow("silhouettes", cv::WINDOW_AUTOSIZE);
+			//cv::imshow("sil", binaryMat);
+			//waitKey(0);
 
-		//______________________-------------------->>>
+			//Sils computation done_____________-------------------->>>
 
-		Mat threshold_output;
-		vector<vector<Point> > contours;
-		vector<Vec4i> hierarchy;
+			////Compute Bounding Rects
 
-		/// Detect edges using Threshold
-		threshold(grayscaleMat, threshold_output, 20, 255, THRESH_BINARY);
-		//threshold(binaryMat, threshold_output, 20, 255, THRESH_BINARY);
-		/// Find contours
-		findContours(threshold_output, contours, hierarchy, CV_RETR_TREE,
-				CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+			Mat threshold_output;
+			vector<vector<Point> > contours;
+			vector<Vec4i> hierarchy;
 
-		//findContours(binaryMat, contours, hierarchy, CV_RETR_TREE,
-		//CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
-		/// Approximate contours to polygons + get bounding rects and circles
-		vector<vector<Point> > contours_poly(contours.size());
-		vector<Rect> boundRect(contours.size());
-		vector<Point2f> center(contours.size());
-		vector<float> radius(contours.size());
-		float maxArea = 0;
-		int BBindex;
+			/// Detect edges using Threshold
+			threshold(grayscaleMat, threshold_output, 20, 255, THRESH_BINARY);
+			//threshold(binaryMat, threshold_output, 20, 255, THRESH_BINARY);
+			/// Find contours
+			findContours(threshold_output, contours, hierarchy, CV_RETR_TREE,
+					CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
-		for (int i = 0; i < contours.size(); i++) {
-			approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
-			boundRect[i] = boundingRect(Mat(contours_poly[i]));
-			minEnclosingCircle((Mat) contours_poly[i], center[i], radius[i]);
+			vector<vector<Point> > contours_poly(contours.size());
+			vector<Rect> boundRect(contours.size());
+			vector<Point2f> center(contours.size());
+			float maxArea = 0;
+			int BBindex;
 
-			double a = contourArea(contours[i], false);
-			if (a > maxArea) {
-				maxArea = a;
-				BBindex = i;  //Store the index of largest contour
-				//bounding_rect=boundingRect(contours[i]); // Find the bounding rectangle for biggest contour
+			for (int i = 0; i < contours.size(); i++) {
+				approxPolyDP(Mat(contours[i]), contours_poly[i], 3, true);
+				boundRect[i] = boundingRect(Mat(contours_poly[i]));
+
+				double a = contourArea(contours[i], false);
+				if (a > maxArea) {
+					maxArea = a;
+					BBindex = i;  //Store the index of largest contour
+					//bounding_rect=boundingRect(contours[i]); // Find the bounding rectangle for biggest contour
+				}
 			}
+
+			Mat drawing = Mat::zeros(threshold_output.size(), CV_8UC3);
+
+			drawContours(drawing, contours, BBindex, Scalar(255), CV_FILLED, 8,
+					hierarchy);
+			rectangle(drawing, boundRect[BBindex].tl(), boundRect[BBindex].br(),
+					Scalar(255, 255, 255), 2, 8, 0);
+			Rect test = boundRect[BBindex];
+			int x = test.x;
+			int y = test.y;
+			int width = test.width;
+			int height = test.height;
+			// Now with those parameters you can calculate the 4 points
+			Point top_left(x, y);
+			Point top_right(x + width, y);
+			Point bottom_left(x, y + height);
+			Point bottom_right(x + width, y + height);
+
+			/// Show in a window
+			//		namedWindow("Contours", CV_WINDOW_AUTOSIZE);
+			//		imshow("Contours", drawing);
+			//		waitKey(0);
+
+			silhouettes.push_back(binaryMat);
+
 		}
 
-		/// Draw polygonal contour + bonding rects + circles
+		//Read Camera Params from text file ***************************************************
 
-		Mat drawing = Mat::zeros(threshold_output.size(), CV_8UC3);
+		vector<cv::Mat> K;
+		vector<cv::Mat> Rt;
 
-//		RNG rng(12345);
-//		for (int i = 0; i < contours.size(); i++) {
-//			Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255),
-//					rng.uniform(0, 255));
-//			drawContours(drawing, contours_poly, i, color, 1, 8,
-//					vector<Vec4i>(), 0, Point());
-//			rectangle(drawing, boundRect[i].tl(), boundRect[i].br(), color, 2,
-//					8, 0);
-//			circle(drawing, center[i], (int) radius[i], color, 2, 8, 0);
-//		}
+		vector<string> fid;
 
-		drawContours( drawing, contours, BBindex, Scalar(255), CV_FILLED, 8, hierarchy );
-		rectangle(drawing, boundRect[BBindex].tl(), boundRect[BBindex].br(), Scalar(255,255,255), 2,
-							8, 0);
-		Rect test = boundRect[BBindex];
-		int x = test.x;
-		int y = test.y;
-		int width = test.width;
-		int height = test.height;
-		// Now with those parameters you can calculate the 4 points
-		Point top_left(x,y);
-		Point top_right(x+width,y);
-		Point bottom_left(x,y+height);
-		Point bottom_right(x+width,y+height);
-
-		cout<<top_left<<", "<<top_right<<", "<<", "<<bottom_left<<", "<<bottom_right <<endl;
-
-		/// Show in a window
-//		namedWindow("Contours", CV_WINDOW_AUTOSIZE);
-//		imshow("Contours", drawing);
-//		waitKey(0);
-
-		silhouettes.push_back(binaryMat);
-
-	}
-
-	//Read Camera Params from text file ***************************************************
-
-	vector<cv::Mat> K;
-	vector<cv::Mat> Rt;
-
-	vector<string> fid;
-
-	std::ifstream txtfile("dancer/dancer_par.txt");
-	//std::ifstream txtfile("templeSR/templeSR_par.txt");
-	std::string line;
-	vector<string> linedata;
-	std::getline(txtfile, line);
-	std::stringstream linestream(line);
-	int value;
-	int i = 0;
-
-	while (linestream >> value) {
-		N = value;
-	}
-
-	while (std::getline(txtfile, line)) {
+		std::ifstream txtfile("dancer/dancer_par.txt");
+		//std::ifstream txtfile("templeSR/templeSR_par.txt");
+		std::string line;
+		vector<string> linedata;
+		std::getline(txtfile, line);
 		std::stringstream linestream(line);
-		string val;
-		while (linestream >> val) {
-			linedata.push_back(val);
-		}
-	}
-	while (i < linedata.size()) {
-		fid.push_back(linedata[i]);
-		i++;
-		//Put data into K
-//		Mat kk(3, 3, cv::DataType<float>::type, Scalar(1));
-//		for (int j = 0; j < 3; j++) {
-//			for (int k = 0; k < 3; k++) {
-//				float temp = strtof((linedata[i]).c_str(), 0);
-//
-//				kk.at<float>(j, k) = temp;
-//				i++;
-//			}
-//		}
-//		K.push_back(kk);
-//
-//		Mat Rttemp(3, 4, cv::DataType<float>::type, Scalar(1));
-//		for (int j = 0; j < 3; j++) {
-//			for (int k = 0; k < 3; k++) {
-//				float temp = strtof((linedata[i]).c_str(), 0);
-//
-//				Rttemp.at<float>(j, k) = temp;
-//				i++;
-//			}
-//		}
-//		int k = 3;
-//		for (int j = 0; j < 3; j++) {
-//			float temp = strtof((linedata[i]).c_str(), 0);
-//			Rttemp.at<float>(j, k) = temp;
-//			i++;
-//		}
-//		Rt.push_back(Rttemp);
-		Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
-		for (int j = 0; j < 3; j++) {
-			for (int k = 0; k < 4; k++) {
-				float temp = strtof((linedata[i]).c_str(), 0);
+		int value;
+		int i = 0;
 
-				P.at<float>(j, k) = temp;
-				i++;
+		while (linestream >> value) {
+			N = value;
+		}
+
+		while (std::getline(txtfile, line)) {
+			std::stringstream linestream(line);
+			string val;
+			while (linestream >> val) {
+				linedata.push_back(val);
 			}
 		}
-		M.push_back(P);
+		while (i < linedata.size()) {
+			fid.push_back(linedata[i]);
+			i++;
 
-	}
+			Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
+			for (int j = 0; j < 3; j++) {
+				for (int k = 0; k < 4; k++) {
+					float temp = strtof((linedata[i]).c_str(), 0);
 
-//	// Compute M's
-//	for (int i = 0; i < N; i++) {
-//
-//		Mat Mtemp = K[i] * Rt[i];
-//		M.push_back(Mtemp);
-//
-//	}
-
-	Vec3d voxel_size(0.01, 0.01, 0.01);	//resolution
-
-	//Bounding box for DinoSR
-	Vec2d xlim(-0.31, 1.05);
-	Vec2d ylim(-1.69, -1.13);
-	Vec2d zlim(-0.29, 2.05);
-
-	//BB for templeRing
-//	Vec2d xlim(-0.05, 0.11);
-//	Vec2d ylim(-0.04, 0.15);
-//	Vec2d zlim(-0.1, 0.06);
-
-	//initialize voxels
-	Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim, voxels);
-	cout << "voxels voting done!" << endl;
-
-	Mat voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted);
-	cout << "voxel3D conversion done!" << endl;
-
-	float error = 5;
-	float maxv = 0;
-	float minv = 10;
-	for (int i = 0; i < total_number; i++) {
-		if (voxels_voted.at<float>(i, 3) > maxv) {
-			maxv = voxels_voted.at<float>(i, 3);
-			cout << "maxv updated, now: " << maxv << endl;
-		} else if (voxels_voted.at<float>(i, 3) < minv) {
-			minv = voxels_voted.at<float>(i, 3);
-		}
-	}
-
-	float iso_value = maxv - round((maxv / 100) * error) - 0.5;
-
-	int j, k, l, n;
-
-	short int data[dim[0]][dim[1]][dim[2]];
-
-	GRIDCELL grid;
-	TRIANGLE triangles[10];
-	vector<TRIANGLE> tri;
-	//TRIANGLE tri[1000];
-	int ntri = 0;
-	FILE *fptr;
-
-	double isolevel = iso_value * 0.925;
-
-	for (k = dim[2]; k >= 0; k--) {
-		for (j = 0; j < dim[1]; j++) {
-			for (i = 0; i < dim[0]; i++) {
-				data[i][j][k] = voxel3D.at<float>(i, j, k);
-			}
-		}
-	}
-
-	fprintf(stderr, "Polygonising data ...\n");
-	for (i = 0; i < dim[0] - 1; i++) {
-		if (i % (dim[0] / 10) == 0)
-			fprintf(stderr, "   Slice %d of %d\n", i, dim[0]);
-		for (j = 0; j < dim[1] - 1; j++) {
-			for (k = 0; k < dim[2] - 1; k++) {
-
-				grid.p[0].x = i;
-				grid.p[0].y = j;
-				grid.p[0].z = k;
-				grid.val[0] = data[i][j][k];
-				grid.p[1].x = i + 1;
-				grid.p[1].y = j;
-				grid.p[1].z = k;
-				grid.val[1] = data[i + 1][j][k];
-				grid.p[2].x = i + 1;
-				grid.p[2].y = j + 1;
-				grid.p[2].z = k;
-				grid.val[2] = data[i + 1][j + 1][k];
-				grid.p[3].x = i;
-				grid.p[3].y = j + 1;
-				grid.p[3].z = k;
-				grid.val[3] = data[i][j + 1][k];
-				grid.p[4].x = i;
-				grid.p[4].y = j;
-				grid.p[4].z = k + 1;
-				grid.val[4] = data[i][j][k + 1];
-				grid.p[5].x = i + 1;
-				grid.p[5].y = j;
-				grid.p[5].z = k + 1;
-				grid.val[5] = data[i + 1][j][k + 1];
-				grid.p[6].x = i + 1;
-				grid.p[6].y = j + 1;
-				grid.p[6].z = k + 1;
-				grid.val[6] = data[i + 1][j + 1][k + 1];
-				grid.p[7].x = i;
-				grid.p[7].y = j + 1;
-				grid.p[7].z = k + 1;
-				grid.val[7] = data[i][j + 1][k + 1];
-
-				n = PolygoniseCube(grid, isolevel, triangles);
-
-				for (l = 0; l < n; l++) {
-					tri.push_back(triangles[l]);
-					//tri[ntri] = triangles[l];
+					P.at<float>(j, k) = temp;
+					i++;
 				}
-				ntri += n;
+			}
+			M.push_back(P);
+
+		}
+
+		//Bounding box Calculation here
+		Vec2d xlim(-0.31, 1.05);
+		Vec2d ylim(-1.69, -1.13);
+		Vec2d zlim(-0.29, 2.05);
+
+		//Set resolution after BB calculation
+		Vec3d voxel_size(0.01, 0.01, 0.01);	//resolution
+
+		//initialize voxels
+		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
+				voxels, total_number, silhouettes, M);
+		cout << "voxels voting done!" << endl;
+
+		Mat voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
+				total_number);
+		cout << "voxel3D conversion done!" << endl;
+
+		float error = 5;
+		float maxv = 0;
+		float minv = 10;
+		for (int i = 0; i < total_number; i++) {
+			if (voxels_voted.at<float>(i, 3) > maxv) {
+				maxv = voxels_voted.at<float>(i, 3);
+				//cout << "maxv updated, now: " << maxv << endl;
+			} else if (voxels_voted.at<float>(i, 3) < minv) {
+				minv = voxels_voted.at<float>(i, 3);
 			}
 		}
-	}
 
-	////for outputting in .off file
+		float iso_value = maxv - round((maxv / 100) * error) - 0.5;
 
-	if ((fptr = fopen("output2.off", "w")) == NULL) {
-		fprintf(stderr, "Failed to open .off file!\n");
-		exit(-1);
-	}
+		int j, k, l, n;
 
-	int numVerts = ntri * 3;
-	cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
+		short int data[dim[0]][dim[1]][dim[2]];
 
-	fprintf(fptr, "OFF\n");
-	fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
+		GRIDCELL grid;
+		TRIANGLE triangles[10];
+		vector<TRIANGLE> tri;
 
-	for (i = 0; i < ntri; i++) {
-		for (k = 0; k < 3; k++) {
-			fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
-					tri[i].p[k].z);
+		int ntri = 0;
+		FILE *fptr;
+
+		double isolevel = iso_value * 0.925;
+
+		for (k = dim[2]; k >= 0; k--) {
+			for (j = 0; j < dim[1]; j++) {
+				for (i = 0; i < dim[0]; i++) {
+					data[i][j][k] = voxel3D.at<float>(i, j, k);
+				}
+			}
 		}
-	}
-	int vertCount = 0;
-	for (i = 0; i < ntri; i++) {
-		fprintf(fptr, "3 ");
-		fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1, vertCount + 2);
-		vertCount += 3;
-	}
 
-	fclose(fptr);
-	printf("Output wrote in .off format!\n");
+		fprintf(stderr, "Polygonising data ...\n");
+		for (i = 0; i < dim[0] - 1; i++) {
+			if (i % (dim[0] / 10) == 0)
+				fprintf(stderr, "   Slice %d of %d\n", i, dim[0]);
+			for (j = 0; j < dim[1] - 1; j++) {
+				for (k = 0; k < dim[2] - 1; k++) {
+
+					grid.p[0].x = i;
+					grid.p[0].y = j;
+					grid.p[0].z = k;
+					grid.val[0] = data[i][j][k];
+					grid.p[1].x = i + 1;
+					grid.p[1].y = j;
+					grid.p[1].z = k;
+					grid.val[1] = data[i + 1][j][k];
+					grid.p[2].x = i + 1;
+					grid.p[2].y = j + 1;
+					grid.p[2].z = k;
+					grid.val[2] = data[i + 1][j + 1][k];
+					grid.p[3].x = i;
+					grid.p[3].y = j + 1;
+					grid.p[3].z = k;
+					grid.val[3] = data[i][j + 1][k];
+					grid.p[4].x = i;
+					grid.p[4].y = j;
+					grid.p[4].z = k + 1;
+					grid.val[4] = data[i][j][k + 1];
+					grid.p[5].x = i + 1;
+					grid.p[5].y = j;
+					grid.p[5].z = k + 1;
+					grid.val[5] = data[i + 1][j][k + 1];
+					grid.p[6].x = i + 1;
+					grid.p[6].y = j + 1;
+					grid.p[6].z = k + 1;
+					grid.val[6] = data[i + 1][j + 1][k + 1];
+					grid.p[7].x = i;
+					grid.p[7].y = j + 1;
+					grid.p[7].z = k + 1;
+					grid.val[7] = data[i][j + 1][k + 1];
+
+					n = PolygoniseCube(grid, isolevel, triangles);
+
+					for (l = 0; l < n; l++) {
+						tri.push_back(triangles[l]);
+					}
+					ntri += n;
+				}
+			}
+		}
+
+		////for outputting in .off file
+
+		if ((fptr = fopen("output2.off", "w")) == NULL) {
+			fprintf(stderr, "Failed to open .off file!\n");
+			exit(-1);
+		}
+
+		int numVerts = ntri * 3;
+		cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
+
+		fprintf(fptr, "OFF\n");
+		fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
+
+		for (i = 0; i < ntri; i++) {
+			for (k = 0; k < 3; k++) {
+				fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
+						tri[i].p[k].z);
+			}
+		}
+		int vertCount = 0;
+		for (i = 0; i < ntri; i++) {
+			fprintf(fptr, "3 ");
+			fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1,
+					vertCount + 2);
+			vertCount += 3;
+		}
+
+		fclose(fptr);
+		printf("Output wrote in .off format!\n");
+	}
 
 	return 0;
 }
 
 Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
-		vector<Vec4d> voxels) {
+		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
+		vector<Mat>& M) {
 
 	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
 	voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
@@ -440,9 +391,9 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 	cout << dim[0] << endl;
 
 	int i = 0;
-	int a, b, c;
-	float x, y, z;
-	//problem here ---------->
+	//int a, b, c;
+	//float x, y, z;
+
 	while (i < total_number) {
 		for (float z = ez; z >= sz; z -= z_step) {
 			for (float x = sx; x <= ex; x += x_step) {
@@ -456,30 +407,10 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 			}
 		}
 	}
-//	while (i < total_number) {
-//		y = sy;
-//		for (c = 0; c < dim[2]; c++) {
-//			z = ez;
-//			for (a = 0; a < dim[0]; a++) {
-//				x = sx;
-//				for (b = 0; b < dim[1]; b++) {
-//
-//					voxel.at<float>(i, 0) = x;
-//					voxel.at<float>(i, 1) = y;
-//					voxel.at<float>(i, 2) = z;
-//					voxel.at<float>(i, 3) = 1;
-//					i++;
-//					y += y_step;
-//				}
-//				x += x_step;
-//			}
-//			z -= z_step;
-//		}
-//	}
+
 	cout << total_number << endl;
 	Mat obj_points_3D = voxel.t();
 
-	/// zeroing the 4th column
 	for (int i = 0; i < total_number; i++) {
 		voxel.at<float>(i, 3) = 0;
 	}
@@ -495,8 +426,6 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 		Mat curr_sil = silhouettes[num];
 		Mat curr_sil_bin(imgH, imgW, CV_32F);
 
-		//Mat img_val(total_number, 1, CV_32F, Scalar(0));
-
 		int count1 = 0;
 		for (int row = 0; row < imgH; row++) {
 			for (int col = 0; col < imgW; col++) {
@@ -509,7 +438,6 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 		}
 
 		points2d = camParam * obj_points_3D;
-		//cout<<total_number<<endl;
 
 		for (int c = 0; c < total_number; c++) {
 			for (int r = 0; r < 3; r++) {
@@ -535,11 +463,9 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 					row = 0;
 				else if (col < 0 || col > imgW - 1)
 					col = 0;
-				//img_val.at<float>(c, 0) = curr_sil_bin.at<float>(row, col);
 				voxel.at<float>(c, 3) += curr_sil_bin.at<float>(row, col);
-				//voxel.at<float>(c, 3) += img_val.at<float>(c, 0);
-				//cout<<total_number<<endl;
-			}				//points2d is now "obj_point_cam"
+
+			}
 
 		}
 
@@ -550,28 +476,29 @@ Mat InitializeVoxels(Vec3d voxel_size, Vec2d xlim, Vec2d ylim, Vec2d zlim,
 
 }
 
-Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel) {
+Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel,
+		int& total_number) {
 
 	Mat voxel3D(3, dim, CV_32FC1, Scalar(0));
 
-	float sx, ex, sy, ey, sz, ez;
+	//float sx, ex, sy, ey, sz, ez;
 	int l, x1, y1, z1;
 
-	sx = -(voxel_number[0] / 2) * voxel_size[0];
-	ex = (voxel_number[0] / 2) * voxel_size[0];
-	sy = -(voxel_number[1] / 2) * voxel_size[1];
-	ey = (voxel_number[1] / 2) * voxel_size[1];
-	sz = 0;
-	ez = voxel_number[2] * voxel_size[2];
+//	sx = -(voxel_number[0] / 2) * voxel_size[0];
+//	ex = (voxel_number[0] / 2) * voxel_size[0];
+//	sy = -(voxel_number[1] / 2) * voxel_size[1];
+//	ey = (voxel_number[1] / 2) * voxel_size[1];
+//	sz = 0;
+//	ez = voxel_number[2] * voxel_size[2];
 
-	cout<<dim[0]<<", "<<dim[1]<<", "<<dim[2]<<endl;
+	cout << dim[0] << ", " << dim[1] << ", " << dim[2] << endl;
 
 	l = 0;
 	z1 = 0;
 	int j = 0;
 	while (l < total_number) {
 		//z1=0;
-		for (z1 = 0; z1 < dim[2]+1; z1++) {
+		for (z1 = 0; z1 < dim[2] + 1; z1++) {
 			for (x1 = 0; x1 < dim[0]; x1++) {
 				for (y1 = 0; y1 < dim[1]; y1++) {
 					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
@@ -583,8 +510,6 @@ Mat VoxelConvertTo3D(Vec3d voxel_number, Vec3d voxel_size, Mat voxel) {
 			}
 		}
 	}
-
-	//cout << j << endl;
 
 	return voxel3D;
 }
