@@ -11,16 +11,20 @@
 #include <math.h>
 #include <cstdlib>
 
+#include <MeshReconstruction.h>
+#include <IO.h>
+
 #define PI 3.14159265
 
 using namespace cv;
 using namespace std;
+using namespace MeshReconstruction;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 5;			//number of frames
+int F = 45;			//number of frames
 int dim[3];
-int decPoint = 1 / 0.1;
+int decPoint = 1 / 0.01;
 ////for bounding box computation
 
 typedef struct {
@@ -149,7 +153,7 @@ typedef struct {
 #define ABS(x) (x < 0 ? -(x) : (x))
 
 // Prototypes
-int PolygoniseCube(GRIDCELL, double, TRIANGLE *);
+int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh &mesh);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
 Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
@@ -161,7 +165,7 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 
 int main() {
 
-	for (int countFrame = 3; countFrame < F; countFrame++) {
+	for (int countFrame = 44; countFrame < F; countFrame++) {
 		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
@@ -469,7 +473,7 @@ int main() {
 				<< endl;
 
 		//Set resolution after BB calculation
-		Vec3f voxel_size(0.1, 0.1, 0.1);	//resolution
+		Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
 
 		//initialize voxels
 		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
@@ -504,6 +508,7 @@ int main() {
 
 		int ntri = 0;
 		FILE *fptr;
+		Mesh mesh;
 
 		double isolevel = iso_value * 0.925;
 
@@ -555,7 +560,7 @@ int main() {
 					grid.p[7].z = k + 1;
 					grid.val[7] = data[i][j + 1][k + 1];
 
-					n = PolygoniseCube(grid, isolevel, triangles);
+					n = PolygoniseCube(grid, isolevel, triangles, mesh);
 
 					for (l = 0; l < n; l++) {
 						tri.push_back(triangles[l]);
@@ -566,35 +571,73 @@ int main() {
 		}
 
 		////for outputting in .off file
+
+//		cout<<outputfilename<<endl;
+//
+//		if ((fptr = fopen("output/output.off", "w")) == NULL) {
+//			fprintf(stderr, "Failed to open .off file!\n");
+//			exit(-1);
+//		}
+//
+//		int numVerts = ntri * 3;
+//		cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
+//
+//		fprintf(fptr, "OFF\n");
+//		fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
+//
+//		for (i = 0; i < ntri; i++) {
+//			for (k = 0; k < 3; k++) {
+//				fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
+//						tri[i].p[k].z);
+//			}
+//		}
+//		int vertCount = 0;
+//		for (i = 0; i < ntri; i++) {
+//			fprintf(fptr, "3 ");
+//			fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1,
+//					vertCount + 2);
+//			vertCount += 3;
+//		}
+//
+//		fclose(fptr);
+//		printf("Output wrote in .off format!\n");
+
+		///// writing output
+
+//		string outputfilename = "output/output" + to_string(countFrame)
+//				+ ".off";
+
+		//// .off output
+//		ofstream myfile;
+//		myfile.open(outputfilename);
+//		int numVerts = ntri * 3;
+//
+//		myfile << "OFF\n";
+//		myfile << numVerts << " " << ntri << " " << 0 << "\n";
+//		for (i = 0; i < ntri; i++) {
+//			for (k = 0; k < 3; k++) {
+//				myfile << tri[i].p[k].x << " " << tri[i].p[k].y << " "
+//						<< tri[i].p[k].z << "\n";
+//			}
+//		}
+//		int vertCount = 0;
+//		for (i = 0; i < ntri; i++) {
+//			myfile << "3 ";
+//			myfile << vertCount << " " << vertCount + 1 << " " << vertCount + 2
+//					<< "\n";
+//			vertCount += 3;
+//		}
+//
+//		myfile.close();
+//		printf("Output wrote in .off format!\n");
+
+
+		////For .obj file
 		string outputfilename = "output/output" + to_string(countFrame)
-				+ ".off";
-		if ((fptr = fopen("output/output.off", "w")) == NULL) {
-			fprintf(stderr, "Failed to open .off file!\n");
-			exit(-1);
-		}
+						+ ".obj";
+		WriteObjFile(mesh, outputfilename);
+		printf("Output wrote in .obj file!\n");
 
-		int numVerts = ntri * 3;
-		cout << "NumVerts: " << numVerts << " NumTri: " << ntri << endl;
-
-		fprintf(fptr, "OFF\n");
-		fprintf(fptr, "%d %d %d\n", numVerts, ntri, 0);
-
-		for (i = 0; i < ntri; i++) {
-			for (k = 0; k < 3; k++) {
-				fprintf(fptr, "%f %f %f\n", tri[i].p[k].x, tri[i].p[k].y,
-						tri[i].p[k].z);
-			}
-		}
-		int vertCount = 0;
-		for (i = 0; i < ntri; i++) {
-			fprintf(fptr, "3 ");
-			fprintf(fptr, "%i %i %i\n", vertCount, vertCount + 1,
-					vertCount + 2);
-			vertCount += 3;
-		}
-
-		fclose(fptr);
-		printf("Output wrote in .off format!\n");
 	}
 
 	return 0;
@@ -772,7 +815,7 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 	return voxel3D;
 }
 
-int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri) {
+int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh &mesh) {
 	int i, ntri = 0;
 	int cubeindex;
 	XYZ vertlist[12];
@@ -1187,6 +1230,40 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri) {
 		tri[ntri].p[0] = vertlist[triTable[cubeindex][i]];
 		tri[ntri].p[1] = vertlist[triTable[cubeindex][i + 1]];
 		tri[ntri].p[2] = vertlist[triTable[cubeindex][i + 2]];
+
+		Vec3 v0 { (double) tri[ntri].p[0].x, (double) tri[ntri].p[0].y,
+				(double) tri[ntri].p[0].z };
+		Vec3 v1 { (double) tri[ntri].p[1].x, (double) tri[ntri].p[1].y,
+				(double) tri[ntri].p[1].z };
+		Vec3 v2 { (double) tri[ntri].p[2].x, (double) tri[ntri].p[2].y,
+				(double) tri[ntri].p[2].z };
+
+		mesh.vertices.push_back(v0);
+		mesh.vertices.push_back(v1);
+		mesh.vertices.push_back(v2);
+
+		Vec3 V = v1 - v0;
+		Vec3 W = v2 - v0;
+
+		Vec3 normal0 { 1, 0, 0 };
+		Vec3 normal1 { 0, 1, 0 };
+		Vec3 normal2 { 0, 0, 1 };
+
+		normal2.x = normal1.x = normal0.x = V.y * W.z - V.z * W.y;
+		normal2.y = normal1.y = normal0.y = V.z * W.x - V.x * W.z;
+		normal2.z = normal1.z = normal0.z = V.x * W.y - V.y * W.x;
+
+		normal2.x = normal1.x = normal0.x = normal0.x/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+		 normal2.y = normal1.y = normal0.y = normal0.y/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+		 normal2.z = normal1.z = normal0.z = normal0.z/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+
+		mesh.vertexNormals.push_back(normal0);
+		mesh.vertexNormals.push_back(normal1);
+		mesh.vertexNormals.push_back(normal2);
+
+		auto last = static_cast<int>(mesh.vertices.size() - 1);
+
+		mesh.triangles.push_back( { last - 2, last - 1, last });
 
 		ntri++;
 	}
