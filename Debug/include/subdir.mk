@@ -7,26 +7,29 @@ CPP_SRCS += \
 ../include/Cube.cpp \
 ../include/IO.cpp \
 ../include/MeshReconstruction.cpp \
-../include/Triangulation.cpp 
+../include/Triangulation.cpp \
+../include/Vectors.cpp 
 
 OBJS += \
 ./include/Cube.o \
 ./include/IO.o \
 ./include/MeshReconstruction.o \
-./include/Triangulation.o 
+./include/Triangulation.o \
+./include/Vectors.o 
 
 CPP_DEPS += \
 ./include/Cube.d \
 ./include/IO.d \
 ./include/MeshReconstruction.d \
-./include/Triangulation.d 
+./include/Triangulation.d \
+./include/Vectors.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
 include/%.o: ../include/%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	g++ -I"\usr\local\include\opencv" -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)" -o "$@" "$<"
+	g++ -I/home/khaque/opencv2.4/include -I/home/khaque/workspace/VisualHull2/include -O0 -g3 -Wall -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 
