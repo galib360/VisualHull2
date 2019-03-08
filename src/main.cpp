@@ -22,7 +22,7 @@ using namespace MeshReconstruction;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 45;			//number of frames
+int F = 15;			//number of frames
 int dim[3];
 int decPoint = 1 / 0.01;
 ////for bounding box computation
@@ -153,19 +153,19 @@ typedef struct {
 #define ABS(x) (x < 0 ? -(x) : (x))
 
 // Prototypes
-int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh &mesh);
+int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh& mesh);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
 Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
-		vector<Mat>& M);
+		vector<Mat>& M, Mat& voxel);
 
 Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
-		int& total_number);
+		int& total_number, Mat& voxel3D);
 
 int main() {
 
-	for (int countFrame = 44; countFrame < F; countFrame++) {
+	for (int countFrame = 0; countFrame < F; countFrame++) {
 		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
@@ -173,6 +173,8 @@ int main() {
 		vector<Mat> silhouettes;
 		vector<Mat> imageData;
 		vector<Vec4d> voxels;
+		Mat voxel;
+		Mat voxel3D;
 
 		vector<campnts> pnts;
 		vector<Mat> points3D;
@@ -477,11 +479,11 @@ int main() {
 
 		//initialize voxels
 		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
-				voxels, total_number, silhouettes, M);
+				voxels, total_number, silhouettes, M, voxel);
 		cout << "voxels voting done!" << endl;
 
-		Mat voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
-				total_number);
+		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
+				total_number, voxel3D);
 		cout << "voxel3D conversion done!" << endl;
 
 		float error = 5;
@@ -638,6 +640,11 @@ int main() {
 		WriteObjFile(mesh, outputfilename);
 		printf("Output wrote in .obj file!\n");
 
+		//Release & delete
+		voxel.release();
+		voxel3D.release();
+		voxels_voted.release();
+
 	}
 
 	return 0;
@@ -645,7 +652,7 @@ int main() {
 
 Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
-		vector<Mat>& M) {
+		vector<Mat>& M, Mat& voxel) {
 
 	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
 	voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
@@ -655,7 +662,7 @@ Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 			* (voxel_number[2] + 1));
 	cout << total_number << endl;
 
-	Mat voxel(total_number, 4, cv::DataType<float>::type, Scalar(1));
+	voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
 
 	float sx = xlim[0];
 	float ex = xlim[1];
@@ -779,9 +786,9 @@ Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 }
 
 Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
-		int& total_number) {
+		int& total_number, Mat& voxel3D) {
 
-	Mat voxel3D(3, dim, CV_32FC1, Scalar(0));
+	voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
 
 	//float sx, ex, sy, ey, sz, ez;
 	int l, x1, y1, z1;
@@ -815,7 +822,7 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 	return voxel3D;
 }
 
-int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh &mesh) {
+int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 	int i, ntri = 0;
 	int cubeindex;
 	XYZ vertlist[12];
