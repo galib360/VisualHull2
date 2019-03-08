@@ -22,7 +22,8 @@ using namespace MeshReconstruction;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 15;			//number of frames
+int F = 201;			//number of frames
+int startFrame = 40;
 int dim[3];
 int decPoint = 1 / 0.01;
 ////for bounding box computation
@@ -157,7 +158,7 @@ int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh& mesh);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
 Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
-		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
+		int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M, Mat& voxel);
 
 Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
@@ -165,14 +166,14 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 
 int main() {
 
-	for (int countFrame = 0; countFrame < F; countFrame++) {
+	for (int countFrame = startFrame; countFrame < F; countFrame++) {
 		//Load data
 
 		int total_number;	//bounding volumes's prod(dims)
 		vector<Mat> M; 	//params
 		vector<Mat> silhouettes;
 		vector<Mat> imageData;
-		vector<Vec4d> voxels;
+
 		Mat voxel;
 		Mat voxel3D;
 
@@ -479,7 +480,7 @@ int main() {
 
 		//initialize voxels
 		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
-				voxels, total_number, silhouettes, M, voxel);
+				total_number, silhouettes, M, voxel);
 		cout << "voxels voting done!" << endl;
 
 		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
@@ -509,7 +510,7 @@ int main() {
 		vector<TRIANGLE> tri;
 
 		int ntri = 0;
-		FILE *fptr;
+		//FILE *fptr;
 		Mesh mesh;
 
 		double isolevel = iso_value * 0.925;
@@ -651,7 +652,7 @@ int main() {
 }
 
 Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
-		vector<Vec4d> voxels, int& total_number, vector<Mat>& silhouettes,
+		int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M, Mat& voxel) {
 
 	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
