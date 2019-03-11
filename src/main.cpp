@@ -22,7 +22,7 @@ using namespace MeshReconstruction;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 201;			//number of frames
+int F = 20;			//number of frames
 int startFrame = 0;
 int dim[3];
 int decPoint = 1 / 0.01;
@@ -159,6 +159,7 @@ vector<TRIANGLE> tri(1000000);
 // Prototypes
 int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh& mesh);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
+XYZ NormalInterp(double isolevel, XYZ n1, XYZ n2, double valp1, double valp2);
 
 void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		int& total_number, vector<Mat>& silhouettes,
@@ -166,6 +167,8 @@ void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 
 void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number, Mat& voxel3D);
+
+void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn);
 
 
 Mesh mesh;
@@ -176,6 +179,7 @@ vector<Mat> imageData;
 
 Mat voxel;
 Mat voxel3D;
+//Mat voxel3Dn;
 
 vector<campnts> pnts;
 vector<Mat> points3D;
@@ -540,10 +544,12 @@ int main() {
 
 		if(countFrame == startFrame){
 			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
+			//voxel3Dn = Mat(3, dim, CV_32FC3, Scalar(0));
 		}
 		else{
 			//voxel3D.deallocate();
 			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
+			//voxel3Dn = Mat(3, dim, CV_32FC3, Scalar(0));
 		}
 
 
@@ -552,7 +558,11 @@ int main() {
 
 
 		cout << "voxel3D conversion done!" << endl;
-		cout<<tri.size()<<endl;
+		//cout<<"voxel3D channels: "<<voxel3D.channels()<<" . voxel3Dn channels: "<<voxel3Dn.channels()<<endl;
+
+		//cout<<tri.size()<<endl;
+
+		//ComputeNormals(voxel3D, voxel3Dn);
 
 		float error = 5;
 		float maxv = 0;
@@ -644,7 +654,101 @@ int main() {
 					grid.p[7].x = i;
 					grid.p[7].y = j + 1;
 					grid.p[7].z = k + 1;
-					grid.val[7] = voxel3D.at<float>(i, j+1, k+1);;
+					grid.val[7] = voxel3D.at<float>(i, j+1, k+1);
+
+					if(i >0 && j>0 && k>0 && i<dim[0]-2 && j<dim[1]-2 && k<dim[2]-2){
+						grid.n[0].x = (voxel3D.at<float>(i + 1, j, k)
+								- voxel3D.at<float>(i - 1, j, k))/2;
+						grid.n[0].y = (voxel3D.at<float>(i, j+1, k)
+								- voxel3D.at<float>(i, j-1, k))/2;
+						grid.n[0].z = (voxel3D.at<float>(i, j, k+1)
+								- voxel3D.at<float>(i, j, k-1))/2;
+
+						grid.n[1].x = (voxel3D.at<float>(i + 1 + 1, j, k)
+								- voxel3D.at<float>(i + 1 - 1, j, k))/2;
+						grid.n[1].y = (voxel3D.at<float>(i + 1, j+1, k)
+								- voxel3D.at<float>(i + 1, j-1, k))/2;
+						grid.n[1].z = (voxel3D.at<float>(i + 1, j, k+1)
+								- voxel3D.at<float>(i + 1, j, k-1))/2;
+
+						grid.n[2].x = (voxel3D.at<float>(i + 1+1, j+1, k)
+								- voxel3D.at<float>(i + 1-1, j+1, k))/2;
+						grid.n[2].y = (voxel3D.at<float>(i + 1, j+1+1, k)
+								- voxel3D.at<float>(i + 1, j+1-1, k))/2;
+						grid.n[2].z = (voxel3D.at<float>(i + 1, j+1, k+1)
+								- voxel3D.at<float>(i + 1, j+1, k-1))/2;
+
+						grid.n[3].x = (voxel3D.at<float>(i+1, j+1, k)
+								- voxel3D.at<float>(i-1, j+1, k))/2;
+						grid.n[3].y = (voxel3D.at<float>(i, j+1+1, k)
+								- voxel3D.at<float>(i, j+1-1, k))/2;
+						grid.n[3].z = (voxel3D.at<float>(i, j+1, k+1)
+								- voxel3D.at<float>(i, j+1, k-1))/2;
+
+						grid.n[4].x = (voxel3D.at<float>(i+1, j, k+1)
+								- voxel3D.at<float>(i-1, j, k+1))/2;
+						grid.n[4].y = (voxel3D.at<float>(i, j+1, k+1)
+								- voxel3D.at<float>(i, j-1, k+1))/2;
+						grid.n[4].z = (voxel3D.at<float>(i, j, k+1+1)
+								- voxel3D.at<float>(i, j, k+1-1))/2;
+
+						grid.n[5].x = (voxel3D.at<float>(i+1+1, j, k+1)
+								- voxel3D.at<float>(i+1-1, j, k+1))/2;
+						grid.n[5].y = (voxel3D.at<float>(i+1, j+1, k+1)
+								- voxel3D.at<float>(i+1, j-1, k+1))/2;
+						grid.n[5].z = (voxel3D.at<float>(i+1, j, k+1+1)
+								- voxel3D.at<float>(i+1, j, k+1-1))/2;
+
+						grid.n[6].x = (voxel3D.at<float>(i+1+1, j+1, k+1)
+								- voxel3D.at<float>(i+1-1, j+1, k+1))/2;
+						grid.n[6].y = (voxel3D.at<float>(i+1, j+1+1, k+1)
+								- voxel3D.at<float>(i+1, j+1-1, k+1))/2;
+						grid.n[6].z = (voxel3D.at<float>(i+1, j+1, k+1+1)
+								- voxel3D.at<float>(i+1, j+1, k+1-1))/2;
+
+						grid.n[0].x = (voxel3D.at<float>(i+1, j+1, k+1)
+								- voxel3D.at<float>(i-1, j+1, k+1))/2;
+						grid.n[0].y = (voxel3D.at<float>(i, j+1+1, k+1)
+								- voxel3D.at<float>(i, j+1-1, k+1))/2;
+						grid.n[0].z = (voxel3D.at<float>(i, j+1, k+1+1)
+								- voxel3D.at<float>(i, j+1, k+1-1))/2;
+					}
+
+					else {
+						grid.n[0].x = voxel3D.at<float>(i, j, k);
+						grid.n[0].y = voxel3D.at<float>(i, j, k);
+						grid.n[0].z = voxel3D.at<float>(i, j, k);
+
+						grid.n[1].x = voxel3D.at<float>(i+1, j, k);
+						grid.n[1].y = voxel3D.at<float>(i+1, j, k);
+						grid.n[1].z = voxel3D.at<float>(i+1, j, k);
+
+						grid.n[2].x = voxel3D.at<float>(i+1, j+1, k);
+						grid.n[2].y = voxel3D.at<float>(i+1, j+1, k);
+						grid.n[2].z = voxel3D.at<float>(i+1, j+1, k);
+
+						grid.n[3].x = voxel3D.at<float>(i, j+1, k);
+						grid.n[3].y = voxel3D.at<float>(i, j+1, k);
+						grid.n[3].z = voxel3D.at<float>(i, j+1, k);
+
+						grid.n[4].x = voxel3D.at<float>(i, j, k+1);
+						grid.n[4].y = voxel3D.at<float>(i, j, k+1);
+						grid.n[4].z = voxel3D.at<float>(i, j, k+1);
+
+						grid.n[5].x = voxel3D.at<float>(i+1, j, k+1);
+						grid.n[5].y = voxel3D.at<float>(i+1, j, k+1);
+						grid.n[5].z = voxel3D.at<float>(i+1, j, k+1);
+
+						grid.n[6].x = voxel3D.at<float>(i+1, j+1, k+1);
+						grid.n[6].y = voxel3D.at<float>(i+1, j+1, k+1);
+						grid.n[6].z = voxel3D.at<float>(i+1, j+1, k+1);
+
+						grid.n[0].x = voxel3D.at<float>(i, j+1, k+1);
+						grid.n[0].y = voxel3D.at<float>(i, j+1, k+1);
+						grid.n[0].z = voxel3D.at<float>(i, j+1, k+1);
+					}
+
+
 
 					n = PolygoniseCube(grid, isolevel, triangles, mesh);
 
@@ -729,6 +833,7 @@ int main() {
 
 		voxel.release();
 		voxel3D.release();
+		//voxel3Dn.release();
 		cout<<"voxel size: "<<voxel.size()<<endl;
 		cout<<"voxel3D size: "<<voxel3D.size()<<endl;
 //		voxel.deallocate();
@@ -975,10 +1080,23 @@ void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 	//return voxel3D;
 }
 
+void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn){
+	for(int i =1; i<dim[0]-1;i++){
+		for(int j = 1; j<dim[1]-1; j++){
+			for(int k = 1; k< dim[2]-1; k++){
+				voxel3Dn.at<Vec3f>(i,k,j)[0] = (voxel3D.at<float>(i+1,j,k)-voxel3D.at<float>(i-1,j,k))/2;
+				voxel3Dn.at<Vec3f>(i,k,j)[1] = (voxel3D.at<float>(i,j+1,k)-voxel3D.at<float>(i,j-1,k))/2;
+				voxel3Dn.at<Vec3f>(i,k,j)[2] = (voxel3D.at<float>(i,j,k+1)-voxel3D.at<float>(i,j,k-1))/2;
+			}
+		}
+	}
+}
+
 int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 	int i, ntri = 0;
 	int cubeindex;
 	XYZ vertlist[12];
+	XYZ normlist[12];
 	/*
 	 int edgeTable[256].  It corresponds to the 2^8 possible combinations of
 	 of the eight (n) vertices either existing inside or outside (2^n) of the
@@ -1350,39 +1468,51 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 	/* Find the vertices where the surface intersects the cube */
 	if (edgeTable[cubeindex] & 1) {
 		vertlist[0] = VertexInterp(iso, g.p[0], g.p[1], g.val[0], g.val[1]);
+		normlist[0] = NormalInterp(iso, g.n[0], g.n[1], g.val[0], g.val[1]);
 	}
 	if (edgeTable[cubeindex] & 2) {
 		vertlist[1] = VertexInterp(iso, g.p[1], g.p[2], g.val[1], g.val[2]);
+		normlist[1] = NormalInterp(iso, g.n[1], g.n[2], g.val[1], g.val[2]);
 	}
 	if (edgeTable[cubeindex] & 4) {
 		vertlist[2] = VertexInterp(iso, g.p[2], g.p[3], g.val[2], g.val[3]);
+		normlist[2] = NormalInterp(iso, g.n[2], g.n[3], g.val[2], g.val[3]);
 	}
 	if (edgeTable[cubeindex] & 8) {
 		vertlist[3] = VertexInterp(iso, g.p[3], g.p[0], g.val[3], g.val[0]);
+		normlist[3] = NormalInterp(iso, g.n[3], g.n[0], g.val[3], g.val[0]);
 	}
 	if (edgeTable[cubeindex] & 16) {
 		vertlist[4] = VertexInterp(iso, g.p[4], g.p[5], g.val[4], g.val[5]);
+		normlist[4] = NormalInterp(iso, g.n[4], g.n[5], g.val[4], g.val[5]);
 	}
 	if (edgeTable[cubeindex] & 32) {
 		vertlist[5] = VertexInterp(iso, g.p[5], g.p[6], g.val[5], g.val[6]);
+		normlist[5] = NormalInterp(iso, g.n[5], g.n[6], g.val[5], g.val[6]);
 	}
 	if (edgeTable[cubeindex] & 64) {
 		vertlist[6] = VertexInterp(iso, g.p[6], g.p[7], g.val[6], g.val[7]);
+		normlist[6] = NormalInterp(iso, g.n[6], g.n[7], g.val[6], g.val[7]);
 	}
 	if (edgeTable[cubeindex] & 128) {
 		vertlist[7] = VertexInterp(iso, g.p[7], g.p[4], g.val[7], g.val[4]);
+		normlist[7] = NormalInterp(iso, g.n[7], g.n[5], g.val[7], g.val[4]);
 	}
 	if (edgeTable[cubeindex] & 256) {
 		vertlist[8] = VertexInterp(iso, g.p[0], g.p[4], g.val[0], g.val[4]);
+		normlist[8] = NormalInterp(iso, g.n[0], g.n[4], g.val[0], g.val[4]);
 	}
 	if (edgeTable[cubeindex] & 512) {
 		vertlist[9] = VertexInterp(iso, g.p[1], g.p[5], g.val[1], g.val[5]);
+		normlist[9] = NormalInterp(iso, g.n[1], g.n[5], g.val[1], g.val[5]);
 	}
 	if (edgeTable[cubeindex] & 1024) {
 		vertlist[10] = VertexInterp(iso, g.p[2], g.p[6], g.val[2], g.val[6]);
+		normlist[10] = NormalInterp(iso, g.n[2], g.n[6], g.val[2], g.val[6]);
 	}
 	if (edgeTable[cubeindex] & 2048) {
 		vertlist[11] = VertexInterp(iso, g.p[3], g.p[7], g.val[3], g.val[7]);
+		normlist[11] = NormalInterp(iso, g.n[3], g.n[7], g.val[3], g.val[7]);
 	}
 
 	/* Create the triangles */
@@ -1390,6 +1520,10 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 		tri[ntri].p[0] = vertlist[triTable[cubeindex][i]];
 		tri[ntri].p[1] = vertlist[triTable[cubeindex][i + 1]];
 		tri[ntri].p[2] = vertlist[triTable[cubeindex][i + 2]];
+
+		tri[ntri].n[0] = normlist[triTable[cubeindex][i]];
+		tri[ntri].n[1] = normlist[triTable[cubeindex][i + 1]];
+		tri[ntri].n[2] = normlist[triTable[cubeindex][i + 2]];
 
 		Vec3 v0 { (double) tri[ntri].p[0].x, (double) tri[ntri].p[0].y,
 				(double) tri[ntri].p[0].z };
@@ -1402,20 +1536,24 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 		mesh.vertices.push_back(v1);
 		mesh.vertices.push_back(v2);
 
-		Vec3 V = v1 - v0;
-		Vec3 W = v2 - v0;
 
-		Vec3 normal0 { 1, 0, 0 };
-		Vec3 normal1 { 0, 1, 0 };
-		Vec3 normal2 { 0, 0, 1 };
 
-		normal2.x = normal1.x = normal0.x = V.y * W.z - V.z * W.y;
-		normal2.y = normal1.y = normal0.y = V.z * W.x - V.x * W.z;
-		normal2.z = normal1.z = normal0.z = V.x * W.y - V.y * W.x;
+		Vec3 normal0 { tri[ntri].n[0].x, tri[ntri].n[0].y, tri[ntri].n[0].z };
+		Vec3 normal1 { tri[ntri].n[1].x, tri[ntri].n[1].y, tri[ntri].n[1].z };
+		Vec3 normal2 { tri[ntri].n[2].x, tri[ntri].n[2].y, tri[ntri].n[2].z };
 
-		normal2.x = normal1.x = normal0.x = normal0.x/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
-		 normal2.y = normal1.y = normal0.y = normal0.y/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
-		 normal2.z = normal1.z = normal0.z = normal0.z/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+		//	Trianle normal:
+//		Vec3 V = v1 - v0;
+//		Vec3 W = v2 - v0;
+
+//		normal2.x = normal1.x = normal0.x = V.y * W.z - V.z * W.y;
+//		normal2.y = normal1.y = normal0.y = V.z * W.x - V.x * W.z;
+//		normal2.z = normal1.z = normal0.z = V.x * W.y - V.y * W.x;
+//
+//		normal2.x = normal1.x = normal0.x = normal0.x/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+//		normal2.y = normal1.y = normal0.y = normal0.y/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+//		normal2.z = normal1.z = normal0.z = normal0.z/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+
 
 		mesh.vertexNormals.push_back(normal0);
 		mesh.vertexNormals.push_back(normal1);
@@ -1452,5 +1590,31 @@ XYZ VertexInterp(double isolevel, XYZ p1, XYZ p2, double valp1, double valp2) {
 	//cout<<p.x<<", "<<p.y<<", "<<p.z<<endl;
 
 	return (p);
+}
+
+XYZ NormalInterp(double isolevel, XYZ n1, XYZ n2, double valp1, double valp2) {
+	double mu;
+	XYZ n;
+
+	if (ABS(isolevel-valp1) < 0.00001)
+		return (n1);
+	if (ABS(isolevel-valp2) < 0.00001)
+		return (n2);
+	if (ABS(valp1-valp2) < 0.00001)
+		return (n1);
+	mu = (isolevel - valp1) / (valp2 - valp1);
+	n.x = n1.x + mu * (n2.x - n1.x);
+	n.y = n1.y + mu * (n2.y - n1.y);
+	n.z = n1.z + mu * (n2.z - n1.z);
+	float Len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
+	float Factor = 1.0f / Len;
+
+	n.x = n.x * Factor;
+	n.y = n.y * Factor;
+	n.z = n.z * Factor;
+
+	//cout<<p.x<<", "<<p.y<<", "<<p.z<<endl;
+
+	return (n);
 }
 
