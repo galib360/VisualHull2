@@ -23,9 +23,10 @@ using namespace MeshReconstruction;
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
 int F = 201;			//number of frames
-int startFrame = 40;
+int startFrame = 0;
 int dim[3];
 int decPoint = 1 / 0.01;
+
 ////for bounding box computation
 
 typedef struct {
@@ -151,46 +152,73 @@ typedef struct {
 	XYZ n[3]; /* Normal   */
 } TRIANGLE;
 
+vector<TRIANGLE> tri(1000000);
+
 #define ABS(x) (x < 0 ? -(x) : (x))
 
 // Prototypes
 int PolygoniseCube(GRIDCELL, double, TRIANGLE *, Mesh& mesh);
 XYZ VertexInterp(double, XYZ, XYZ, double, double);
 
-Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
+void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M, Mat& voxel);
 
-Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
+void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number, Mat& voxel3D);
+
+
+Mesh mesh;
+int total_number;	//bounding volumes's prod(dims)
+vector<Mat> M; 	//params
+vector<Mat> silhouettes;
+vector<Mat> imageData;
+
+Mat voxel;
+Mat voxel3D;
+
+vector<campnts> pnts;
+vector<Mat> points3D;
+
+vector<Mat> cameraPos;
+vector<Mat> K;
+vector<Mat> Rt;
+vector<Mat> R;
+vector<Mat> Rvec;
+vector<Mat> t;
+
+vector<Vector3f> cameraOrigins;
+vector<Vector3f> planeNormals;
+vector<Plane> cameraPlanes;
+vector<Point> midpoints;
 
 int main() {
 
 	for (int countFrame = startFrame; countFrame < F; countFrame++) {
 		//Load data
 
-		int total_number;	//bounding volumes's prod(dims)
-		vector<Mat> M; 	//params
-		vector<Mat> silhouettes;
-		vector<Mat> imageData;
-
-		Mat voxel;
-		Mat voxel3D;
-
-		vector<campnts> pnts;
-		vector<Mat> points3D;
-
-		vector<Mat> cameraPos;
-		vector<Mat> K;
-		vector<Mat> Rt;
-		vector<Mat> R;
-		vector<Mat> Rvec;
-		vector<Mat> t;
-
-		vector<Vector3f> cameraOrigins;
-		vector<Vector3f> planeNormals;
-		vector<Plane> cameraPlanes;
-		vector<Point> midpoints;
+//		int total_number;	//bounding volumes's prod(dims)
+//		vector<Mat> M; 	//params
+//		vector<Mat> silhouettes;
+//		vector<Mat> imageData;
+//
+//		Mat voxel;
+//		Mat voxel3D;
+//
+//		vector<campnts> pnts;
+//		vector<Mat> points3D;
+//
+//		vector<Mat> cameraPos;
+//		vector<Mat> K;
+//		vector<Mat> Rt;
+//		vector<Mat> R;
+//		vector<Mat> Rvec;
+//		vector<Mat> t;
+//
+//		vector<Vector3f> cameraOrigins;
+//		vector<Vector3f> planeNormals;
+//		vector<Plane> cameraPlanes;
+//		vector<Point> midpoints;
 
 		for (int countView = 0; countView < N; countView++) {
 
@@ -413,8 +441,8 @@ int main() {
 			float angle = acos(dot / sqrt(lensq1 * lensq2));
 			float angleD = angle * 180.0 / PI;
 
-			cout << "Angle in radian : " << angle << ", in Degree : " << angleD
-					<< endl;
+//			cout << "Angle in radian : " << angle << ", in Degree : " << angleD
+//					<< endl;
 
 			if (angleD < 45) {
 				Mat temp(4, pnts[0].pnts2d.size(), CV_32F);
@@ -478,24 +506,63 @@ int main() {
 		//Set resolution after BB calculation
 		Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
 
+		// new try
+
+		voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
+		voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
+		voxel_number[2] = (zlim[1] - zlim[0]) / voxel_size[2];
+
+		total_number = ((voxel_number[0] + 1) * (voxel_number[1] + 1)
+				* (voxel_number[2] + 1));
+
+		if(countFrame == startFrame){
+			voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
+		}
+		else{
+			//voxel.resize(total_number, 1) ;
+			voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
+		}
+
+
+
 		//initialize voxels
-		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
-				total_number, silhouettes, M, voxel);
+//		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
+//				total_number, silhouettes, M, voxel);
+		InitializeVoxels(voxel_size, xlim, ylim, zlim,
+						total_number, silhouettes, M, voxel);
 		cout << "voxels voting done!" << endl;
 
-		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
-				total_number, voxel3D);
+//		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
+//				total_number, voxel3D);
+
+//		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxel,
+//						total_number, voxel3D);
+
+		if(countFrame == startFrame){
+			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
+		}
+		else{
+			//voxel3D.deallocate();
+			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
+		}
+
+
+		VoxelConvertTo3D(voxel_number, voxel_size, voxel,
+								total_number, voxel3D);
+
+
 		cout << "voxel3D conversion done!" << endl;
+		cout<<tri.size()<<endl;
 
 		float error = 5;
 		float maxv = 0;
 		float minv = 10;
 		for (int i = 0; i < total_number; i++) {
-			if (voxels_voted.at<float>(i, 3) > maxv) {
-				maxv = voxels_voted.at<float>(i, 3);
-				cout << "maxv updated, now: " << maxv << endl;
-			} else if (voxels_voted.at<float>(i, 3) < minv) {
-				minv = voxels_voted.at<float>(i, 3);
+			if (voxel.at<float>(i, 3) > maxv) {
+				maxv = voxel.at<float>(i, 3);
+				//cout << "maxv updated, now: " << maxv << endl;
+			} else if (voxel.at<float>(i, 3) < minv) {
+				minv = voxel.at<float>(i, 3);
 			}
 		}
 
@@ -503,25 +570,41 @@ int main() {
 
 		int i, j, k, l, n;
 
-		short int data[dim[0]][dim[1]][dim[2]];
+		//short int data[dim[0]][dim[1]][dim[2]];
+
 
 		GRIDCELL grid;
 		TRIANGLE triangles[10];
-		vector<TRIANGLE> tri;
+		//vector<TRIANGLE> tri;
+//		if (tri.size() > 0) {
+//			tri.clear();
+//			//tri.shrink_to_fit();
+//		}
+//
+//		cout<<"tri size: "<< tri.size()<<" tri capacity: "<<tri.capacity()<<endl;
 
 		int ntri = 0;
 		//FILE *fptr;
-		Mesh mesh;
+//		Mesh mesh;
 
 		double isolevel = iso_value * 0.925;
 
-		for (k = dim[2]; k >= 0; k--) {
-			for (j = 0; j < dim[1]; j++) {
-				for (i = 0; i < dim[0]; i++) {
-					data[i][j][k] = voxel3D.at<float>(i, j, k);
-				}
-			}
-		}
+//		for (k = dim[2]; k >= 0; k--) {
+//			for (j = 0; j < dim[1]; j++) {
+//				for (i = 0; i < dim[0]; i++) {
+//					//cout<<"value is: "<<voxel3D.at<float>(i, j, k)<<endl;
+//					data[i][j][k] = voxel3D.at<float>(i, j, k);
+//				}
+//			}
+//		}
+//		for (k = 0; k < dim[2]; k++) {
+//					for (j = 0; j < dim[1]; j++) {
+//						for (i = 0; i < dim[0]; i++) {
+//							//cout<<"value is: "<<voxel3D.at<float>(i, j, k)<<endl;
+//							data[i][j][k] = voxel3D.at<float>(i, j, k);
+//						}
+//					}
+//				}
 
 		fprintf(stderr, "Polygonising data ...\n");
 		for (i = 0; i < dim[0] - 1; i++) {
@@ -533,35 +616,35 @@ int main() {
 					grid.p[0].x = i;
 					grid.p[0].y = j;
 					grid.p[0].z = k;
-					grid.val[0] = data[i][j][k];
+					grid.val[0] = voxel3D.at<float>(i, j, k);
 					grid.p[1].x = i + 1;
 					grid.p[1].y = j;
 					grid.p[1].z = k;
-					grid.val[1] = data[i + 1][j][k];
+					grid.val[1] = voxel3D.at<float>(i+1, j, k);
 					grid.p[2].x = i + 1;
 					grid.p[2].y = j + 1;
 					grid.p[2].z = k;
-					grid.val[2] = data[i + 1][j + 1][k];
+					grid.val[2] = voxel3D.at<float>(i+1, j+1, k);
 					grid.p[3].x = i;
 					grid.p[3].y = j + 1;
 					grid.p[3].z = k;
-					grid.val[3] = data[i][j + 1][k];
+					grid.val[3] = voxel3D.at<float>(i, j+1, k);
 					grid.p[4].x = i;
 					grid.p[4].y = j;
 					grid.p[4].z = k + 1;
-					grid.val[4] = data[i][j][k + 1];
+					grid.val[4] = voxel3D.at<float>(i, j, k+1);
 					grid.p[5].x = i + 1;
 					grid.p[5].y = j;
 					grid.p[5].z = k + 1;
-					grid.val[5] = data[i + 1][j][k + 1];
+					grid.val[5] = voxel3D.at<float>(i+1, j, k+1);
 					grid.p[6].x = i + 1;
 					grid.p[6].y = j + 1;
 					grid.p[6].z = k + 1;
-					grid.val[6] = data[i + 1][j + 1][k + 1];
+					grid.val[6] = voxel3D.at<float>(i+1, j+1, k+1);
 					grid.p[7].x = i;
 					grid.p[7].y = j + 1;
 					grid.p[7].z = k + 1;
-					grid.val[7] = data[i][j + 1][k + 1];
+					grid.val[7] = voxel3D.at<float>(i, j+1, k+1);;
 
 					n = PolygoniseCube(grid, isolevel, triangles, mesh);
 
@@ -639,31 +722,75 @@ int main() {
 		string outputfilename = "output/output" + to_string(countFrame)
 						+ ".obj";
 		WriteObjFile(mesh, outputfilename);
+		cout << "NumVerts: " << ntri*3 << " NumTri: " << ntri << endl;
 		printf("Output wrote in .obj file!\n");
 
 		//Release & delete
+
 		voxel.release();
 		voxel3D.release();
-		voxels_voted.release();
+		cout<<"voxel size: "<<voxel.size()<<endl;
+		cout<<"voxel3D size: "<<voxel3D.size()<<endl;
+//		voxel.deallocate();
+//		voxel3D.deallocate();
+
+
+
+		//vectors clared
+		M.clear();
+		silhouettes.clear();
+		imageData.clear();
+		pnts.clear();
+		points3D.clear();
+		cameraPos.clear();
+		K.clear();
+		Rt.clear();
+		R.clear();
+		Rvec.clear();
+		t.clear();
+		tri.clear();
+		mesh.triangles.clear();
+		mesh.vertexNormals.clear();
+		mesh.vertices.clear();
+
+
+		mesh.triangles.shrink_to_fit();
+		mesh.vertexNormals.shrink_to_fit();
+		mesh.vertices.shrink_to_fit();
+		M.shrink_to_fit();
+		silhouettes.shrink_to_fit();
+		imageData.shrink_to_fit();
+		pnts.shrink_to_fit();
+		points3D.shrink_to_fit();
+		cameraPos.shrink_to_fit();
+		K.shrink_to_fit();
+		Rt.shrink_to_fit();
+		R.shrink_to_fit();
+		Rvec.shrink_to_fit();
+		t.shrink_to_fit();
+		//tri.shrink_to_fit();
+		cout<<"tri size: "<< tri.size()<<" tri capacity: "<<tri.capacity()<<endl;
+		//voxels_voted.release();
+
 
 	}
 
 	return 0;
 }
 
-Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
+void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		int& total_number, vector<Mat>& silhouettes,
 		vector<Mat>& M, Mat& voxel) {
 
-	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
-	voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
-	voxel_number[2] = (zlim[1] - zlim[0]) / voxel_size[2];
-
-	total_number = ((voxel_number[0] + 1) * (voxel_number[1] + 1)
-			* (voxel_number[2] + 1));
+//	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
+//	voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
+//	voxel_number[2] = (zlim[1] - zlim[0]) / voxel_size[2];
+//
+//	total_number = ((voxel_number[0] + 1) * (voxel_number[1] + 1)
+//			* (voxel_number[2] + 1));
 	cout << total_number << endl;
 
-	voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
+	//voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
 
 	float sx = xlim[0];
 	float ex = xlim[1];
@@ -702,10 +829,16 @@ Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 	//int a, b, c;
 	//float x, y, z;
 
-	while (i < total_number) {
+	//while (i < total_number) {
 		for (float z = ez; z >= sz; z -= z_step) {
+			if(i>=total_number)
+				break;
 			for (float x = sx; x <= ex; x += x_step) {
+				if(i>=total_number)
+					break;
 				for (float y = sy; y <= ey; y += y_step) {
+					if(i>=total_number)
+						break;
 					voxel.at<float>(i, 0) = x;
 					voxel.at<float>(i, 1) = y;
 					voxel.at<float>(i, 2) = z;
@@ -714,7 +847,7 @@ Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 				}
 			}
 		}
-	}
+	//}
 
 	cout << total_number << endl;
 	Mat obj_points_3D = voxel.t();
@@ -782,14 +915,14 @@ Mat InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 		num++;
 	}
 
-	return voxel;
+//	return voxel;
 
 }
 
-Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
+void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number, Mat& voxel3D) {
 
-	voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
+//	voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
 
 	//float sx, ex, sy, ey, sz, ez;
 	int l, x1, y1, z1;
@@ -807,20 +940,39 @@ Mat VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 	z1 = 0;
 //	cout<<"problem here: "<<voxel.at<float>(185312, 3)<<endl;
 //	cout<<voxel3D.at<float>(27, 39, 237)<<endl;
-	while (l < total_number) {
-		//z1=0;
-		for (z1 = 0; z1 < dim[2]; z1++) {
-			for (x1 = 0; x1 < dim[0]; x1++) {
-				for (y1 = 0; y1 < dim[1]; y1++) {
 
-					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
-					l++;
-				}
+//	while (l < total_number) {
+//		//z1=0;
+//		for (z1 = 0; z1 < dim[2]; z1++) {
+//			for (x1 = 0; x1 < dim[0]; x1++) {
+//				for (y1 = 0; y1 < dim[1]; y1++) {
+//
+//					voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
+//					l++;
+//				}
+//			}
+//		}
+//	}
+
+	//while (l < total_number) {
+	for (z1 = 0; z1 < dim[2]; z1++) {
+		if (l >= total_number)
+			break;
+		for (x1 = 0; x1 < dim[0]; x1++) {
+			if (l >= total_number)
+				break;
+			for (y1 = 0; y1 < dim[1]; y1++) {
+				if (l >= total_number)
+					break;
+
+				voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
+				l++;
 			}
 		}
 	}
+		//}
 
-	return voxel3D;
+	//return voxel3D;
 }
 
 int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
