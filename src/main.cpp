@@ -22,10 +22,10 @@ using namespace MeshReconstruction;
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
-int F = 20;			//number of frames
+int F = 2;			//number of frames
 int startFrame = 0;
 int dim[3];
-int decPoint = 1 / 0.01;
+int decPoint = 1/.01;
 
 ////for bounding box computation
 
@@ -162,14 +162,13 @@ XYZ VertexInterp(double, XYZ, XYZ, double, double);
 XYZ NormalInterp(double isolevel, XYZ n1, XYZ n2, double valp1, double valp2);
 
 void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
-		int& total_number, vector<Mat>& silhouettes,
-		vector<Mat>& M, Mat& voxel);
+		int& total_number, vector<Mat>& silhouettes, vector<Mat>& M,
+		Mat& voxel);
 
 void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 		int& total_number, Mat& voxel3D);
 
 void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn);
-
 
 Mesh mesh;
 int total_number;	//bounding volumes's prod(dims)
@@ -508,7 +507,19 @@ int main() {
 				<< endl;
 
 		//Set resolution after BB calculation
-		Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
+		//Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
+		float resolutionx = round(((xlim[1] - xlim[0]) / 100) * 1000) / 1000;
+		float resolutiony = round(((ylim[1] - ylim[0]) / 100) * 1000) / 1000;
+		float resolutionz = round(((zlim[1] - zlim[0]) / 100) * 1000) / 1000;
+		float resolution = round(
+				(resolutionx + resolutiony + resolutionz) / 3 * 1000) / 1000;
+		float factor = pow(10.0, 1 - ceil(log10(fabs(resolution))));
+		resolution = round(resolution * factor) / factor;
+//		cout<<"calculated resolution: "<< resolutionx<<", "<< resolutiony<<", "<< resolutionz<<endl;
+//		cout<<"resolution final: "<<resolution<<endl;
+
+		Vec3f voxel_size(resolution, resolution, resolution);
+		decPoint = 1/resolution;
 
 		// new try
 
@@ -519,21 +530,13 @@ int main() {
 		total_number = ((voxel_number[0] + 1) * (voxel_number[1] + 1)
 				* (voxel_number[2] + 1));
 
-		if(countFrame == startFrame){
-			voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
-		}
-		else{
-			//voxel.resize(total_number, 1) ;
-			voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
-		}
-
-
+		voxel = Mat(total_number, 4, cv::DataType<float>::type, Scalar(1));
 
 		//initialize voxels
 //		Mat voxels_voted = InitializeVoxels(voxel_size, xlim, ylim, zlim,
 //				total_number, silhouettes, M, voxel);
-		InitializeVoxels(voxel_size, xlim, ylim, zlim,
-						total_number, silhouettes, M, voxel);
+		InitializeVoxels(voxel_size, xlim, ylim, zlim, total_number,
+				silhouettes, M, voxel);
 		cout << "voxels voting done!" << endl;
 
 //		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxels_voted,
@@ -542,20 +545,10 @@ int main() {
 //		voxel3D = VoxelConvertTo3D(voxel_number, voxel_size, voxel,
 //						total_number, voxel3D);
 
-		if(countFrame == startFrame){
-			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
-			//voxel3Dn = Mat(3, dim, CV_32FC3, Scalar(0));
-		}
-		else{
-			//voxel3D.deallocate();
-			voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
-			//voxel3Dn = Mat(3, dim, CV_32FC3, Scalar(0));
-		}
+		voxel3D = Mat(3, dim, CV_32FC1, Scalar(0));
 
-
-		VoxelConvertTo3D(voxel_number, voxel_size, voxel,
-								total_number, voxel3D);
-
+		VoxelConvertTo3D(voxel_number, voxel_size, voxel, total_number,
+				voxel3D);
 
 		cout << "voxel3D conversion done!" << endl;
 		//cout<<"voxel3D channels: "<<voxel3D.channels()<<" . voxel3Dn channels: "<<voxel3Dn.channels()<<endl;
@@ -581,7 +574,6 @@ int main() {
 		int i, j, k, l, n;
 
 		//short int data[dim[0]][dim[1]][dim[2]];
-
 
 		GRIDCELL grid;
 		TRIANGLE triangles[10];
@@ -630,88 +622,95 @@ int main() {
 					grid.p[1].x = i + 1;
 					grid.p[1].y = j;
 					grid.p[1].z = k;
-					grid.val[1] = voxel3D.at<float>(i+1, j, k);
+					grid.val[1] = voxel3D.at<float>(i + 1, j, k);
 					grid.p[2].x = i + 1;
 					grid.p[2].y = j + 1;
 					grid.p[2].z = k;
-					grid.val[2] = voxel3D.at<float>(i+1, j+1, k);
+					grid.val[2] = voxel3D.at<float>(i + 1, j + 1, k);
 					grid.p[3].x = i;
 					grid.p[3].y = j + 1;
 					grid.p[3].z = k;
-					grid.val[3] = voxel3D.at<float>(i, j+1, k);
+					grid.val[3] = voxel3D.at<float>(i, j + 1, k);
 					grid.p[4].x = i;
 					grid.p[4].y = j;
 					grid.p[4].z = k + 1;
-					grid.val[4] = voxel3D.at<float>(i, j, k+1);
+					grid.val[4] = voxel3D.at<float>(i, j, k + 1);
 					grid.p[5].x = i + 1;
 					grid.p[5].y = j;
 					grid.p[5].z = k + 1;
-					grid.val[5] = voxel3D.at<float>(i+1, j, k+1);
+					grid.val[5] = voxel3D.at<float>(i + 1, j, k + 1);
 					grid.p[6].x = i + 1;
 					grid.p[6].y = j + 1;
 					grid.p[6].z = k + 1;
-					grid.val[6] = voxel3D.at<float>(i+1, j+1, k+1);
+					grid.val[6] = voxel3D.at<float>(i + 1, j + 1, k + 1);
 					grid.p[7].x = i;
 					grid.p[7].y = j + 1;
 					grid.p[7].z = k + 1;
-					grid.val[7] = voxel3D.at<float>(i, j+1, k+1);
+					grid.val[7] = voxel3D.at<float>(i, j + 1, k + 1);
 
-					if(i >0 && j>0 && k>0 && i<dim[0]-2 && j<dim[1]-2 && k<dim[2]-2){
+					if (i > 0 && j > 0 && k > 0 && i < dim[0] - 2
+							&& j < dim[1] - 2 && k < dim[2] - 2) {
 						grid.n[0].x = (voxel3D.at<float>(i + 1, j, k)
-								- voxel3D.at<float>(i - 1, j, k))/2;
-						grid.n[0].y = (voxel3D.at<float>(i, j+1, k)
-								- voxel3D.at<float>(i, j-1, k))/2;
-						grid.n[0].z = (voxel3D.at<float>(i, j, k+1)
-								- voxel3D.at<float>(i, j, k-1))/2;
+								- voxel3D.at<float>(i - 1, j, k)) / 2;
+						grid.n[0].y = (voxel3D.at<float>(i, j + 1, k)
+								- voxel3D.at<float>(i, j - 1, k)) / 2;
+						grid.n[0].z = (voxel3D.at<float>(i, j, k + 1)
+								- voxel3D.at<float>(i, j, k - 1)) / 2;
 
 						grid.n[1].x = (voxel3D.at<float>(i + 1 + 1, j, k)
-								- voxel3D.at<float>(i + 1 - 1, j, k))/2;
-						grid.n[1].y = (voxel3D.at<float>(i + 1, j+1, k)
-								- voxel3D.at<float>(i + 1, j-1, k))/2;
-						grid.n[1].z = (voxel3D.at<float>(i + 1, j, k+1)
-								- voxel3D.at<float>(i + 1, j, k-1))/2;
+								- voxel3D.at<float>(i + 1 - 1, j, k)) / 2;
+						grid.n[1].y = (voxel3D.at<float>(i + 1, j + 1, k)
+								- voxel3D.at<float>(i + 1, j - 1, k)) / 2;
+						grid.n[1].z = (voxel3D.at<float>(i + 1, j, k + 1)
+								- voxel3D.at<float>(i + 1, j, k - 1)) / 2;
 
-						grid.n[2].x = (voxel3D.at<float>(i + 1+1, j+1, k)
-								- voxel3D.at<float>(i + 1-1, j+1, k))/2;
-						grid.n[2].y = (voxel3D.at<float>(i + 1, j+1+1, k)
-								- voxel3D.at<float>(i + 1, j+1-1, k))/2;
-						grid.n[2].z = (voxel3D.at<float>(i + 1, j+1, k+1)
-								- voxel3D.at<float>(i + 1, j+1, k-1))/2;
+						grid.n[2].x = (voxel3D.at<float>(i + 1 + 1, j + 1, k)
+								- voxel3D.at<float>(i + 1 - 1, j + 1, k)) / 2;
+						grid.n[2].y = (voxel3D.at<float>(i + 1, j + 1 + 1, k)
+								- voxel3D.at<float>(i + 1, j + 1 - 1, k)) / 2;
+						grid.n[2].z = (voxel3D.at<float>(i + 1, j + 1, k + 1)
+								- voxel3D.at<float>(i + 1, j + 1, k - 1)) / 2;
 
-						grid.n[3].x = (voxel3D.at<float>(i+1, j+1, k)
-								- voxel3D.at<float>(i-1, j+1, k))/2;
-						grid.n[3].y = (voxel3D.at<float>(i, j+1+1, k)
-								- voxel3D.at<float>(i, j+1-1, k))/2;
-						grid.n[3].z = (voxel3D.at<float>(i, j+1, k+1)
-								- voxel3D.at<float>(i, j+1, k-1))/2;
+						grid.n[3].x = (voxel3D.at<float>(i + 1, j + 1, k)
+								- voxel3D.at<float>(i - 1, j + 1, k)) / 2;
+						grid.n[3].y = (voxel3D.at<float>(i, j + 1 + 1, k)
+								- voxel3D.at<float>(i, j + 1 - 1, k)) / 2;
+						grid.n[3].z = (voxel3D.at<float>(i, j + 1, k + 1)
+								- voxel3D.at<float>(i, j + 1, k - 1)) / 2;
 
-						grid.n[4].x = (voxel3D.at<float>(i+1, j, k+1)
-								- voxel3D.at<float>(i-1, j, k+1))/2;
-						grid.n[4].y = (voxel3D.at<float>(i, j+1, k+1)
-								- voxel3D.at<float>(i, j-1, k+1))/2;
-						grid.n[4].z = (voxel3D.at<float>(i, j, k+1+1)
-								- voxel3D.at<float>(i, j, k+1-1))/2;
+						grid.n[4].x = (voxel3D.at<float>(i + 1, j, k + 1)
+								- voxel3D.at<float>(i - 1, j, k + 1)) / 2;
+						grid.n[4].y = (voxel3D.at<float>(i, j + 1, k + 1)
+								- voxel3D.at<float>(i, j - 1, k + 1)) / 2;
+						grid.n[4].z = (voxel3D.at<float>(i, j, k + 1 + 1)
+								- voxel3D.at<float>(i, j, k + 1 - 1)) / 2;
 
-						grid.n[5].x = (voxel3D.at<float>(i+1+1, j, k+1)
-								- voxel3D.at<float>(i+1-1, j, k+1))/2;
-						grid.n[5].y = (voxel3D.at<float>(i+1, j+1, k+1)
-								- voxel3D.at<float>(i+1, j-1, k+1))/2;
-						grid.n[5].z = (voxel3D.at<float>(i+1, j, k+1+1)
-								- voxel3D.at<float>(i+1, j, k+1-1))/2;
+						grid.n[5].x = (voxel3D.at<float>(i + 1 + 1, j, k + 1)
+								- voxel3D.at<float>(i + 1 - 1, j, k + 1)) / 2;
+						grid.n[5].y = (voxel3D.at<float>(i + 1, j + 1, k + 1)
+								- voxel3D.at<float>(i + 1, j - 1, k + 1)) / 2;
+						grid.n[5].z = (voxel3D.at<float>(i + 1, j, k + 1 + 1)
+								- voxel3D.at<float>(i + 1, j, k + 1 - 1)) / 2;
 
-						grid.n[6].x = (voxel3D.at<float>(i+1+1, j+1, k+1)
-								- voxel3D.at<float>(i+1-1, j+1, k+1))/2;
-						grid.n[6].y = (voxel3D.at<float>(i+1, j+1+1, k+1)
-								- voxel3D.at<float>(i+1, j+1-1, k+1))/2;
-						grid.n[6].z = (voxel3D.at<float>(i+1, j+1, k+1+1)
-								- voxel3D.at<float>(i+1, j+1, k+1-1))/2;
+						grid.n[6].x = (voxel3D.at<float>(i + 1 + 1, j + 1,
+								k + 1)
+								- voxel3D.at<float>(i + 1 - 1, j + 1, k + 1))
+								/ 2;
+						grid.n[6].y = (voxel3D.at<float>(i + 1, j + 1 + 1,
+								k + 1)
+								- voxel3D.at<float>(i + 1, j + 1 - 1, k + 1))
+								/ 2;
+						grid.n[6].z = (voxel3D.at<float>(i + 1, j + 1,
+								k + 1 + 1)
+								- voxel3D.at<float>(i + 1, j + 1, k + 1 - 1))
+								/ 2;
 
-						grid.n[0].x = (voxel3D.at<float>(i+1, j+1, k+1)
-								- voxel3D.at<float>(i-1, j+1, k+1))/2;
-						grid.n[0].y = (voxel3D.at<float>(i, j+1+1, k+1)
-								- voxel3D.at<float>(i, j+1-1, k+1))/2;
-						grid.n[0].z = (voxel3D.at<float>(i, j+1, k+1+1)
-								- voxel3D.at<float>(i, j+1, k+1-1))/2;
+						grid.n[7].x = (voxel3D.at<float>(i + 1, j + 1, k + 1)
+								- voxel3D.at<float>(i - 1, j + 1, k + 1)) / 2;
+						grid.n[7].y = (voxel3D.at<float>(i, j + 1 + 1, k + 1)
+								- voxel3D.at<float>(i, j + 1 - 1, k + 1)) / 2;
+						grid.n[7].z = (voxel3D.at<float>(i, j + 1, k + 1 + 1)
+								- voxel3D.at<float>(i, j + 1, k + 1 - 1)) / 2;
 					}
 
 					else {
@@ -719,36 +718,34 @@ int main() {
 						grid.n[0].y = voxel3D.at<float>(i, j, k);
 						grid.n[0].z = voxel3D.at<float>(i, j, k);
 
-						grid.n[1].x = voxel3D.at<float>(i+1, j, k);
-						grid.n[1].y = voxel3D.at<float>(i+1, j, k);
-						grid.n[1].z = voxel3D.at<float>(i+1, j, k);
+						grid.n[1].x = voxel3D.at<float>(i + 1, j, k);
+						grid.n[1].y = voxel3D.at<float>(i + 1, j, k);
+						grid.n[1].z = voxel3D.at<float>(i + 1, j, k);
 
-						grid.n[2].x = voxel3D.at<float>(i+1, j+1, k);
-						grid.n[2].y = voxel3D.at<float>(i+1, j+1, k);
-						grid.n[2].z = voxel3D.at<float>(i+1, j+1, k);
+						grid.n[2].x = voxel3D.at<float>(i + 1, j + 1, k);
+						grid.n[2].y = voxel3D.at<float>(i + 1, j + 1, k);
+						grid.n[2].z = voxel3D.at<float>(i + 1, j + 1, k);
 
-						grid.n[3].x = voxel3D.at<float>(i, j+1, k);
-						grid.n[3].y = voxel3D.at<float>(i, j+1, k);
-						grid.n[3].z = voxel3D.at<float>(i, j+1, k);
+						grid.n[3].x = voxel3D.at<float>(i, j + 1, k);
+						grid.n[3].y = voxel3D.at<float>(i, j + 1, k);
+						grid.n[3].z = voxel3D.at<float>(i, j + 1, k);
 
-						grid.n[4].x = voxel3D.at<float>(i, j, k+1);
-						grid.n[4].y = voxel3D.at<float>(i, j, k+1);
-						grid.n[4].z = voxel3D.at<float>(i, j, k+1);
+						grid.n[4].x = voxel3D.at<float>(i, j, k + 1);
+						grid.n[4].y = voxel3D.at<float>(i, j, k + 1);
+						grid.n[4].z = voxel3D.at<float>(i, j, k + 1);
 
-						grid.n[5].x = voxel3D.at<float>(i+1, j, k+1);
-						grid.n[5].y = voxel3D.at<float>(i+1, j, k+1);
-						grid.n[5].z = voxel3D.at<float>(i+1, j, k+1);
+						grid.n[5].x = voxel3D.at<float>(i + 1, j, k + 1);
+						grid.n[5].y = voxel3D.at<float>(i + 1, j, k + 1);
+						grid.n[5].z = voxel3D.at<float>(i + 1, j, k + 1);
 
-						grid.n[6].x = voxel3D.at<float>(i+1, j+1, k+1);
-						grid.n[6].y = voxel3D.at<float>(i+1, j+1, k+1);
-						grid.n[6].z = voxel3D.at<float>(i+1, j+1, k+1);
+						grid.n[6].x = voxel3D.at<float>(i + 1, j + 1, k + 1);
+						grid.n[6].y = voxel3D.at<float>(i + 1, j + 1, k + 1);
+						grid.n[6].z = voxel3D.at<float>(i + 1, j + 1, k + 1);
 
-						grid.n[0].x = voxel3D.at<float>(i, j+1, k+1);
-						grid.n[0].y = voxel3D.at<float>(i, j+1, k+1);
-						grid.n[0].z = voxel3D.at<float>(i, j+1, k+1);
+						grid.n[7].x = voxel3D.at<float>(i, j + 1, k + 1);
+						grid.n[7].y = voxel3D.at<float>(i, j + 1, k + 1);
+						grid.n[7].z = voxel3D.at<float>(i, j + 1, k + 1);
 					}
-
-
 
 					n = PolygoniseCube(grid, isolevel, triangles, mesh);
 
@@ -821,12 +818,11 @@ int main() {
 //		myfile.close();
 //		printf("Output wrote in .off format!\n");
 
-
 		////For .obj file
 		string outputfilename = "output/output" + to_string(countFrame)
-						+ ".obj";
+				+ ".obj";
 		WriteObjFile(mesh, outputfilename);
-		cout << "NumVerts: " << ntri*3 << " NumTri: " << ntri << endl;
+		cout << "NumVerts: " << ntri * 3 << " NumTri: " << ntri << endl;
 		printf("Output wrote in .obj file!\n");
 
 		//Release & delete
@@ -834,12 +830,10 @@ int main() {
 		voxel.release();
 		voxel3D.release();
 		//voxel3Dn.release();
-		cout<<"voxel size: "<<voxel.size()<<endl;
-		cout<<"voxel3D size: "<<voxel3D.size()<<endl;
+		cout << "voxel size: " << voxel.size() << endl;
+		cout << "voxel3D size: " << voxel3D.size() << endl;
 //		voxel.deallocate();
 //		voxel3D.deallocate();
-
-
 
 		//vectors clared
 		M.clear();
@@ -858,7 +852,6 @@ int main() {
 		mesh.vertexNormals.clear();
 		mesh.vertices.clear();
 
-
 		mesh.triangles.shrink_to_fit();
 		mesh.vertexNormals.shrink_to_fit();
 		mesh.vertices.shrink_to_fit();
@@ -874,9 +867,9 @@ int main() {
 		Rvec.shrink_to_fit();
 		t.shrink_to_fit();
 		//tri.shrink_to_fit();
-		cout<<"tri size: "<< tri.size()<<" tri capacity: "<<tri.capacity()<<endl;
+		cout << "tri size: " << tri.size() << " tri capacity: "
+				<< tri.capacity() << endl;
 		//voxels_voted.release();
-
 
 	}
 
@@ -884,8 +877,8 @@ int main() {
 }
 
 void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
-		int& total_number, vector<Mat>& silhouettes,
-		vector<Mat>& M, Mat& voxel) {
+		int& total_number, vector<Mat>& silhouettes, vector<Mat>& M,
+		Mat& voxel) {
 
 //	voxel_number[0] = (xlim[1] - xlim[0]) / voxel_size[0];
 //	voxel_number[1] = (ylim[1] - ylim[0]) / voxel_size[1];
@@ -935,23 +928,23 @@ void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 	//float x, y, z;
 
 	//while (i < total_number) {
-		for (float z = ez; z >= sz; z -= z_step) {
-			if(i>=total_number)
+	for (float z = ez; z >= sz; z -= z_step) {
+		if (i >= total_number)
+			break;
+		for (float x = sx; x <= ex; x += x_step) {
+			if (i >= total_number)
 				break;
-			for (float x = sx; x <= ex; x += x_step) {
-				if(i>=total_number)
+			for (float y = sy; y <= ey; y += y_step) {
+				if (i >= total_number)
 					break;
-				for (float y = sy; y <= ey; y += y_step) {
-					if(i>=total_number)
-						break;
-					voxel.at<float>(i, 0) = x;
-					voxel.at<float>(i, 1) = y;
-					voxel.at<float>(i, 2) = z;
-					voxel.at<float>(i, 3) = 1;
-					i++;
-				}
+				voxel.at<float>(i, 0) = x;
+				voxel.at<float>(i, 1) = y;
+				voxel.at<float>(i, 2) = z;
+				voxel.at<float>(i, 3) = 1;
+				i++;
 			}
 		}
+	}
 	//}
 
 	cout << total_number << endl;
@@ -1075,18 +1068,21 @@ void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 			}
 		}
 	}
-		//}
+	//}
 
 	//return voxel3D;
 }
 
-void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn){
-	for(int i =1; i<dim[0]-1;i++){
-		for(int j = 1; j<dim[1]-1; j++){
-			for(int k = 1; k< dim[2]-1; k++){
-				voxel3Dn.at<Vec3f>(i,k,j)[0] = (voxel3D.at<float>(i+1,j,k)-voxel3D.at<float>(i-1,j,k))/2;
-				voxel3Dn.at<Vec3f>(i,k,j)[1] = (voxel3D.at<float>(i,j+1,k)-voxel3D.at<float>(i,j-1,k))/2;
-				voxel3Dn.at<Vec3f>(i,k,j)[2] = (voxel3D.at<float>(i,j,k+1)-voxel3D.at<float>(i,j,k-1))/2;
+void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn) {
+	for (int i = 1; i < dim[0] - 1; i++) {
+		for (int j = 1; j < dim[1] - 1; j++) {
+			for (int k = 1; k < dim[2] - 1; k++) {
+				voxel3Dn.at<Vec3f>(i, k, j)[0] = (voxel3D.at<float>(i + 1, j, k)
+						- voxel3D.at<float>(i - 1, j, k)) / 2;
+				voxel3Dn.at<Vec3f>(i, k, j)[1] = (voxel3D.at<float>(i, j + 1, k)
+						- voxel3D.at<float>(i, j - 1, k)) / 2;
+				voxel3Dn.at<Vec3f>(i, k, j)[2] = (voxel3D.at<float>(i, j, k + 1)
+						- voxel3D.at<float>(i, j, k - 1)) / 2;
 			}
 		}
 	}
@@ -1536,8 +1532,6 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 		mesh.vertices.push_back(v1);
 		mesh.vertices.push_back(v2);
 
-
-
 		Vec3 normal0 { tri[ntri].n[0].x, tri[ntri].n[0].y, tri[ntri].n[0].z };
 		Vec3 normal1 { tri[ntri].n[1].x, tri[ntri].n[1].y, tri[ntri].n[1].z };
 		Vec3 normal2 { tri[ntri].n[2].x, tri[ntri].n[2].y, tri[ntri].n[2].z };
@@ -1553,7 +1547,6 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 //		normal2.x = normal1.x = normal0.x = normal0.x/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
 //		normal2.y = normal1.y = normal0.y = normal0.y/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
 //		normal2.z = normal1.z = normal0.z = normal0.z/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
-
 
 		mesh.vertexNormals.push_back(normal0);
 		mesh.vertexNormals.push_back(normal1);
