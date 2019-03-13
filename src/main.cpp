@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <chrono>
 
 #include <math.h>
 #include <cstdlib>
@@ -19,13 +20,15 @@
 using namespace cv;
 using namespace std;
 using namespace MeshReconstruction;
+using namespace std::chrono;
 
 Vec3f voxel_number;
-int N = 8;			//how many cameras/views
-int F = 2;			//number of frames
+int N = 16;			//how many cameras/views
+int F = 410;			//number of frames
 int startFrame = 0;
 int dim[3];
 int decPoint = 1/.01;
+int vnormal = 0;	// 1 for per vertex normal calculation, 0 for per triangle
 
 ////for bounding box computation
 
@@ -197,6 +200,8 @@ vector<Point> midpoints;
 
 int main() {
 
+	high_resolution_clock::time_point t1 = high_resolution_clock::now();
+
 	for (int countFrame = startFrame; countFrame < F; countFrame++) {
 		//Load data
 
@@ -225,13 +230,26 @@ int main() {
 
 		for (int countView = 0; countView < N; countView++) {
 
-			cv::String path("data/cam0" + to_string(countView) + "/*.pbm");
-			//cout << path << endl;
-			vector<String> fn;
-			cv::glob(path, fn, true); // recurse
+			//cv::String path("data/cam0" + to_string(countView) + "/*.pbm");
+			cv::String path;
+			if (countView<10){
+				//path = "children/cam0" + to_string(countView) + "/*.png";
+				path = "children/cam0" + to_string(countView) + "/";
+			}
+			else if(countView>=10){
+				//path = "children/cam" + to_string(countView) + "/*.png";
+				path = "children/cam" + to_string(countView) + "/";
+			}
 
-			cv::Mat im = cv::imread(fn[countFrame]);
-			//cout << fn[countFrame] << endl;
+			//cout << path << endl;
+			String fn = to_string(countFrame) + ".png";
+			//cv::glob(path, fn, true); // recurse
+
+			//cv::Mat im = cv::imread(fn[countFrame]);
+
+			cv::Mat im = cv::imread(path+fn);
+//			cout << countFrame << endl;
+//			cout << path+fn << endl;
 
 			if (im.empty())
 				continue; //only proceed if sucsessful
@@ -329,16 +347,22 @@ int main() {
 			pnts.push_back(camerapnts);
 
 			/// Show in a window
-//						namedWindow("Contours", CV_WINDOW_AUTOSIZE);
-//						imshow("Contours", drawing);
-//						waitKey(0);
+//			namedWindow("Contours", CV_WINDOW_AUTOSIZE);
+//			imshow("Contours", drawing);
+//			waitKey(0);
 
 			silhouettes.push_back(binaryMat);
 
 			vector<string> fid;
 
-			std::ifstream txtfile(
-					"data/cam0" + to_string(countView) + "/cam_par.txt");
+//			std::ifstream txtfile(
+//					"data/cam0" + to_string(countView) + "/cam_par.txt");
+			std::ifstream txtfile;
+			if (countView < 10) {
+				txtfile = ifstream("children/cam0" + to_string(countView)+ "/cam_par.txt");
+			} else if (countView >= 10) {
+				txtfile = ifstream("children/cam" + to_string(countView)+ "/cam_par.txt");
+			}
 			//cout << "data/cam0" + to_string(countView) + "/cam_par.txt" << endl;
 			//std::ifstream txtfile("templeSR/templeSR_par.txt");
 			std::string line;
@@ -511,12 +535,13 @@ int main() {
 		float resolutionx = round(((xlim[1] - xlim[0]) / 100) * 1000) / 1000;
 		float resolutiony = round(((ylim[1] - ylim[0]) / 100) * 1000) / 1000;
 		float resolutionz = round(((zlim[1] - zlim[0]) / 100) * 1000) / 1000;
-		float resolution = round(
+		float resolution = (
 				(resolutionx + resolutiony + resolutionz) / 3 * 1000) / 1000;
+		cout<<resolution<<endl;
 		float factor = pow(10.0, 1 - ceil(log10(fabs(resolution))));
 		resolution = round(resolution * factor) / factor;
-//		cout<<"calculated resolution: "<< resolutionx<<", "<< resolutiony<<", "<< resolutionz<<endl;
-//		cout<<"resolution final: "<<resolution<<endl;
+		cout<<"calculated resolution: "<< resolutionx<<", "<< resolutiony<<", "<< resolutionz<<endl;
+		cout<<"resolution final: "<<resolution<<endl;
 
 		Vec3f voxel_size(resolution, resolution, resolution);
 		decPoint = 1/resolution;
@@ -563,7 +588,7 @@ int main() {
 		for (int i = 0; i < total_number; i++) {
 			if (voxel.at<float>(i, 3) > maxv) {
 				maxv = voxel.at<float>(i, 3);
-				//cout << "maxv updated, now: " << maxv << endl;
+				cout << "maxv updated, now: " << maxv << endl;
 			} else if (voxel.at<float>(i, 3) < minv) {
 				minv = voxel.at<float>(i, 3);
 			}
@@ -753,6 +778,7 @@ int main() {
 						tri.push_back(triangles[l]);
 					}
 					ntri += n;
+					//cout<<"triangles: "<<ntri<<endl;
 				}
 			}
 		}
@@ -819,19 +845,22 @@ int main() {
 //		printf("Output wrote in .off format!\n");
 
 		////For .obj file
-		string outputfilename = "output/output" + to_string(countFrame)
-				+ ".obj";
-		WriteObjFile(mesh, outputfilename);
-		cout << "NumVerts: " << ntri * 3 << " NumTri: " << ntri << endl;
-		printf("Output wrote in .obj file!\n");
+		if (ntri < 100000) {
+			string outputfilename = "output/output" + to_string(countFrame)
+					+ ".obj";
+			WriteObjFile(mesh, outputfilename);
+			cout << "NumVerts: " << ntri * 3 << " NumTri: " << ntri << endl;
+			printf("Output wrote in .obj file!\n");
+		}
+
 
 		//Release & delete
 
 		voxel.release();
 		voxel3D.release();
 		//voxel3Dn.release();
-		cout << "voxel size: " << voxel.size() << endl;
-		cout << "voxel3D size: " << voxel3D.size() << endl;
+//		cout << "voxel size: " << voxel.size() << endl;
+//		cout << "voxel3D size: " << voxel3D.size() << endl;
 //		voxel.deallocate();
 //		voxel3D.deallocate();
 
@@ -867,11 +896,18 @@ int main() {
 		Rvec.shrink_to_fit();
 		t.shrink_to_fit();
 		//tri.shrink_to_fit();
-		cout << "tri size: " << tri.size() << " tri capacity: "
-				<< tri.capacity() << endl;
+//		cout << "tri size: " << tri.size() << " tri capacity: "
+//				<< tri.capacity() << endl;
 		//voxels_voted.release();
 
 	}
+
+	high_resolution_clock::time_point t2 = high_resolution_clock::now();
+
+	auto durationms = duration_cast<microseconds>( t2 - t1 ).count();
+	auto durations = duration_cast<seconds>( t2 - t1 ).count();
+	cout <<"Total code execution time: " <<durationms<<" ms"<<endl;
+	cout <<"Total code execution time: " <<durations<<" sec"<<endl;
 
 	return 0;
 }
@@ -921,7 +957,7 @@ void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 	dim[1] = voxel_number[1] + 1;
 	dim[2] = voxel_number[2] + 2;
 
-	cout << dim[0] << endl;
+	//cout << dim[0] << endl;
 
 	int i = 0;
 	//int a, b, c;
@@ -947,7 +983,7 @@ void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 	}
 	//}
 
-	cout << total_number << endl;
+	//cout << total_number << endl;
 	Mat obj_points_3D = voxel.t();
 
 	for (int i = 0; i < total_number; i++) {
@@ -1024,6 +1060,7 @@ void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 
 	//float sx, ex, sy, ey, sz, ez;
 	int l, x1, y1, z1;
+	//int j =0;
 
 //	sx = -(voxel_number[0] / 2) * voxel_size[0];
 //	ex = (voxel_number[0] / 2) * voxel_size[0];
@@ -1065,12 +1102,15 @@ void VoxelConvertTo3D(Vec3f voxel_number, Vec3f voxel_size, Mat voxel,
 
 				voxel3D.at<float>(x1, y1, z1) = voxel.at<float>(l, 3);
 				l++;
+//				if(voxel3D.at<float>(x1,y1,z1)>28)
+//					j++;
 			}
 		}
 	}
 	//}
 
 	//return voxel3D;
+	//cout<<"greater than isova: "<<j<<endl;
 }
 
 void ComputeNormals(Mat& voxel3D, Mat& voxel3Dn) {
@@ -1532,21 +1572,34 @@ int PolygoniseCube(GRIDCELL g, double iso, TRIANGLE *tri, Mesh& mesh) {
 		mesh.vertices.push_back(v1);
 		mesh.vertices.push_back(v2);
 
-		Vec3 normal0 { tri[ntri].n[0].x, tri[ntri].n[0].y, tri[ntri].n[0].z };
-		Vec3 normal1 { tri[ntri].n[1].x, tri[ntri].n[1].y, tri[ntri].n[1].z };
-		Vec3 normal2 { tri[ntri].n[2].x, tri[ntri].n[2].y, tri[ntri].n[2].z };
+		Vec3 normal0, normal1, normal2;
 
-		//	Trianle normal:
-//		Vec3 V = v1 - v0;
-//		Vec3 W = v2 - v0;
+		if (vnormal == 1) {
+			normal0 = Vec3{ tri[ntri].n[0].x, tri[ntri].n[0].y, tri[ntri].n[0].z };
+			normal1 = Vec3{ tri[ntri].n[1].x, tri[ntri].n[1].y, tri[ntri].n[1].z };
+			normal2 = Vec3{ tri[ntri].n[2].x, tri[ntri].n[2].y, tri[ntri].n[2].z };
+		}
 
-//		normal2.x = normal1.x = normal0.x = V.y * W.z - V.z * W.y;
-//		normal2.y = normal1.y = normal0.y = V.z * W.x - V.x * W.z;
-//		normal2.z = normal1.z = normal0.z = V.x * W.y - V.y * W.x;
-//
-//		normal2.x = normal1.x = normal0.x = normal0.x/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
-//		normal2.y = normal1.y = normal0.y = normal0.y/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
-//		normal2.z = normal1.z = normal0.z = normal0.z/ (abs(normal0.x)+abs(normal0.y)+abs(normal0.z));
+		else{
+			//	Triangle normal:
+			Vec3 V = v1 - v0;
+			Vec3 W = v2 - v0;
+
+
+			normal2.x = normal1.x = normal0.x = V.y * W.z - V.z * W.y;
+			normal2.y = normal1.y = normal0.y = V.z * W.x - V.x * W.z;
+			normal2.z = normal1.z = normal0.z = V.x * W.y - V.y * W.x;
+
+			normal2.x = normal1.x = normal0.x = normal0.x
+					/ (abs(normal0.x) + abs(normal0.y) + abs(normal0.z));
+			normal2.y = normal1.y = normal0.y = normal0.y
+					/ (abs(normal0.x) + abs(normal0.y) + abs(normal0.z));
+			normal2.z = normal1.z = normal0.z = normal0.z
+					/ (abs(normal0.x) + abs(normal0.y) + abs(normal0.z));
+
+		}
+
+
 
 		mesh.vertexNormals.push_back(normal0);
 		mesh.vertexNormals.push_back(normal1);
