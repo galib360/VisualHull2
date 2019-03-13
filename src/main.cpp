@@ -23,12 +23,14 @@ using namespace MeshReconstruction;
 using namespace std::chrono;
 
 Vec3f voxel_number;
-int N = 16;			//how many cameras/views
-int F = 410;			//number of frames
-int startFrame = 0;
+int N = 8;			//how many cameras/views
+int F = 270;			//number of frames
+int startFrame = 260;
 int dim[3];
 int decPoint = 1/.01;
 int vnormal = 0;	// 1 for per vertex normal calculation, 0 for per triangle
+float isoscaler = 0.925;
+Vec3f voxel_size;
 
 ////for bounding box computation
 
@@ -258,18 +260,18 @@ int main() {
 
 			//Compute sils
 
-			Vec3b bgcolor = im.at<Vec3b>(Point(1, 1));
-
-			for (int x = 0; x < im.rows; x++) {
-				for (int y = 0; y < im.cols; y++) {
-					if (im.at<Vec3b>(x, y) == bgcolor) {
-						im.at<Vec3b>(x, y)[0] = 0;
-						im.at<Vec3b>(x, y)[1] = 0;
-						im.at<Vec3b>(x, y)[2] = 0;
-
-					}
-				}
-			}
+//			Vec3b bgcolor = im.at<Vec3b>(Point(1, 1));
+//
+//			for (int x = 0; x < im.rows; x++) {
+//				for (int y = 0; y < im.cols; y++) {
+//					if (im.at<Vec3b>(x, y) == bgcolor) {
+//						im.at<Vec3b>(x, y)[0] = 0;
+//						im.at<Vec3b>(x, y)[1] = 0;
+//						im.at<Vec3b>(x, y)[2] = 0;
+//
+//					}
+//				}
+//			}
 
 			// without watershed
 			//Grayscale matrix
@@ -532,19 +534,27 @@ int main() {
 
 		//Set resolution after BB calculation
 		//Vec3f voxel_size(0.01, 0.01, 0.01);	//resolution
-		float resolutionx = round(((xlim[1] - xlim[0]) / 100) * 1000) / 1000;
-		float resolutiony = round(((ylim[1] - ylim[0]) / 100) * 1000) / 1000;
-		float resolutionz = round(((zlim[1] - zlim[0]) / 100) * 1000) / 1000;
-		float resolution = (
-				(resolutionx + resolutiony + resolutionz) / 3 * 1000) / 1000;
-		cout<<resolution<<endl;
-		float factor = pow(10.0, 1 - ceil(log10(fabs(resolution))));
-		resolution = round(resolution * factor) / factor;
-		cout<<"calculated resolution: "<< resolutionx<<", "<< resolutiony<<", "<< resolutionz<<endl;
-		cout<<"resolution final: "<<resolution<<endl;
 
-		Vec3f voxel_size(resolution, resolution, resolution);
-		decPoint = 1/resolution;
+		if(countFrame == startFrame){
+			float resolutionx = round(((xlim[1] - xlim[0]) / 100) * 1000)
+					/ 1000;
+			float resolutiony = round(((ylim[1] - ylim[0]) / 100) * 1000)
+					/ 1000;
+			float resolutionz = round(((zlim[1] - zlim[0]) / 100) * 1000)
+					/ 1000;
+			float resolution = ((resolutionx + resolutiony + resolutionz) / 3
+					* 1000) / 1000;
+			cout << resolution << endl;
+			float factor = pow(10.0, 1 - ceil(log10(fabs(resolution))));
+			resolution = round(resolution * factor) / factor;
+			cout << "calculated resolution: " << resolutionx << ", "
+					<< resolutiony << ", " << resolutionz << endl;
+			cout << "resolution final: " << resolution << endl;
+
+			voxel_size = Vec3f(resolution, resolution, resolution);
+			decPoint = 1 / resolution;
+
+		}
 
 		// new try
 
@@ -614,7 +624,7 @@ int main() {
 		//FILE *fptr;
 //		Mesh mesh;
 
-		double isolevel = iso_value * 0.925;
+		double isolevel = iso_value * isoscaler;
 
 //		for (k = dim[2]; k >= 0; k--) {
 //			for (j = 0; j < dim[1]; j++) {
