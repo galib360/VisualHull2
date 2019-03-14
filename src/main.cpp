@@ -23,9 +23,9 @@ using namespace MeshReconstruction;
 using namespace std::chrono;
 
 Vec3f voxel_number;
-int N = 8;			//how many cameras/views
-int F = 270;			//number of frames
-int startFrame = 260;
+int N = 10;			//how many cameras/views
+int F = 194;			//number of frames
+int startFrame = 185;
 int dim[3];
 int decPoint = 1/.01;
 int vnormal = 0;	// 1 for per vertex normal calculation, 0 for per triangle
@@ -643,45 +643,113 @@ int main() {
 //					}
 //				}
 
+
+		float sx = xlim[0];
+		float ex = xlim[1];
+		float sy = ylim[0];
+		float ey = ylim[1];
+		float sz = zlim[0];
+		float ez = zlim[1];
+
+		float x_step;
+		float y_step;
+		float z_step;
+
+		if (ex > sx) {
+			x_step = voxel_size[0];
+		} else {
+			x_step = -voxel_size[0];
+		}
+		if (ey > sy) {
+			y_step = voxel_size[1];
+		} else {
+			y_step = -voxel_size[1];
+		}
+		if (ez > sz) {
+			z_step = voxel_size[2];
+		} else {
+			z_step = -voxel_size[2];
+		}
+
+		float x = sx;
+		float y = sy;
+		float z = ez;
+
 		fprintf(stderr, "Polygonising data ...\n");
 		for (i = 0; i < dim[0] - 1; i++) {
 			if (i % (dim[0] / 10) == 0)
 				fprintf(stderr, "   Slice %d of %d\n", i, dim[0]);
+			y = sy;
 			for (j = 0; j < dim[1] - 1; j++) {
+				z =ez;
 				for (k = 0; k < dim[2] - 1; k++) {
 
-					grid.p[0].x = i;
-					grid.p[0].y = j;
-					grid.p[0].z = k;
+//					grid.p[0].x = i;
+//					grid.p[0].y = j;
+//					grid.p[0].z = k;
+//					grid.val[0] = voxel3D.at<float>(i, j, k);
+//					grid.p[1].x = i + 1;
+//					grid.p[1].y = j;
+//					grid.p[1].z = k;
+//					grid.val[1] = voxel3D.at<float>(i + 1, j, k);
+//					grid.p[2].x = i + 1;
+//					grid.p[2].y = j + 1;
+//					grid.p[2].z = k;
+//					grid.val[2] = voxel3D.at<float>(i + 1, j + 1, k);
+//					grid.p[3].x = i;
+//					grid.p[3].y = j + 1;
+//					grid.p[3].z = k;
+//					grid.val[3] = voxel3D.at<float>(i, j + 1, k);
+//					grid.p[4].x = i;
+//					grid.p[4].y = j;
+//					grid.p[4].z = k + 1;
+//					grid.val[4] = voxel3D.at<float>(i, j, k + 1);
+//					grid.p[5].x = i + 1;
+//					grid.p[5].y = j;
+//					grid.p[5].z = k + 1;
+//					grid.val[5] = voxel3D.at<float>(i + 1, j, k + 1);
+//					grid.p[6].x = i + 1;
+//					grid.p[6].y = j + 1;
+//					grid.p[6].z = k + 1;
+//					grid.val[6] = voxel3D.at<float>(i + 1, j + 1, k + 1);
+//					grid.p[7].x = i;
+//					grid.p[7].y = j + 1;
+//					grid.p[7].z = k + 1;
+//					grid.val[7] = voxel3D.at<float>(i, j + 1, k + 1);
+
+					grid.p[0].x = x;
+					grid.p[0].y = y;
+					grid.p[0].z = z;
 					grid.val[0] = voxel3D.at<float>(i, j, k);
-					grid.p[1].x = i + 1;
-					grid.p[1].y = j;
-					grid.p[1].z = k;
+					grid.p[1].x = x + x_step;
+					grid.p[1].y = y;
+					grid.p[1].z = z;
 					grid.val[1] = voxel3D.at<float>(i + 1, j, k);
-					grid.p[2].x = i + 1;
-					grid.p[2].y = j + 1;
-					grid.p[2].z = k;
+					grid.p[2].x = x + x_step;
+					grid.p[2].y = y + y_step;
+					grid.p[2].z = z;
 					grid.val[2] = voxel3D.at<float>(i + 1, j + 1, k);
-					grid.p[3].x = i;
-					grid.p[3].y = j + 1;
-					grid.p[3].z = k;
+					grid.p[3].x = x;
+					grid.p[3].y = y + y_step;
+					grid.p[3].z = z;
 					grid.val[3] = voxel3D.at<float>(i, j + 1, k);
-					grid.p[4].x = i;
-					grid.p[4].y = j;
-					grid.p[4].z = k + 1;
+					grid.p[4].x = x;
+					grid.p[4].y = y;
+					grid.p[4].z = z - z_step;
 					grid.val[4] = voxel3D.at<float>(i, j, k + 1);
-					grid.p[5].x = i + 1;
-					grid.p[5].y = j;
-					grid.p[5].z = k + 1;
+					grid.p[5].x = x + x_step;
+					grid.p[5].y = y;
+					grid.p[5].z = z - z_step;
 					grid.val[5] = voxel3D.at<float>(i + 1, j, k + 1);
-					grid.p[6].x = i + 1;
-					grid.p[6].y = j + 1;
-					grid.p[6].z = k + 1;
+					grid.p[6].x = x + x_step;
+					grid.p[6].y = y + y_step;
+					grid.p[6].z = z - z_step;
 					grid.val[6] = voxel3D.at<float>(i + 1, j + 1, k + 1);
-					grid.p[7].x = i;
-					grid.p[7].y = j + 1;
-					grid.p[7].z = k + 1;
+					grid.p[7].x = x;
+					grid.p[7].y = y + y_step;
+					grid.p[7].z = z - z_step;
 					grid.val[7] = voxel3D.at<float>(i, j + 1, k + 1);
+					z -= z_step;
 
 					if (i > 0 && j > 0 && k > 0 && i < dim[0] - 2
 							&& j < dim[1] - 2 && k < dim[2] - 2) {
@@ -790,7 +858,9 @@ int main() {
 					ntri += n;
 					//cout<<"triangles: "<<ntri<<endl;
 				}
+				y += y_step;
 			}
+			x += x_step;
 		}
 
 		////for outputting in .off file
