@@ -24,8 +24,8 @@ using namespace std::chrono;
 
 Vec3f voxel_number;
 int N = 10;			//how many cameras/views
-int F = 194;			//number of frames
-int startFrame = 185;
+int F = 201;			//number of frames
+int startFrame = 167;
 int dim[3];
 int decPoint = 1/.01;
 int vnormal = 0;	// 1 for per vertex normal calculation, 0 for per triangle
@@ -199,6 +199,14 @@ vector<Vector3f> cameraOrigins;
 vector<Vector3f> planeNormals;
 vector<Plane> cameraPlanes;
 vector<Point> midpoints;
+
+
+float xmin = 100;
+float xmax = -100;
+float ymin = 100;
+float ymax = -100;
+float zmin = 100;
+float zmax = -100;
 
 int main() {
 
@@ -450,12 +458,12 @@ int main() {
 //		vector<cv::Mat> Rt;
 
 		//Bounding box Calculation here
-		float xmin = 100;
-		float xmax = -100;
-		float ymin = 100;
-		float ymax = -100;
-		float zmin = 100;
-		float zmax = -100;
+//		float xmin = 100;
+//		float xmax = -100;
+//		float ymin = 100;
+//		float ymax = -100;
+//		float zmin = 100;
+//		float zmax = -100;
 
 		for (int a = 0; a < N - 1; a++) {
 
@@ -1035,7 +1043,7 @@ void InitializeVoxels(Vec3f voxel_size, Vec2f xlim, Vec2f ylim, Vec2f zlim,
 
 	dim[0] = voxel_number[0] + 1;
 	dim[1] = voxel_number[1] + 1;
-	dim[2] = voxel_number[2] + 2;
+	dim[2] = voxel_number[2] + 1;
 
 	//cout << dim[0] << endl;
 
