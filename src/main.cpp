@@ -9,6 +9,18 @@
 #include <fstream>
 #include <chrono>
 
+#include<vcg/complex/complex.h>
+#include <vcg/complex/algorithms/update/topology.h>
+#include <vcg/complex/algorithms/update/normal.h>
+
+#include<vcg/complex/algorithms/clean.h>
+#include<vcg/complex/algorithms/smooth.h>
+
+// input output
+#include <wrap/io_trimesh/import.h>
+#include <wrap/io_trimesh/export_ply.h>
+#include <wrap/io_trimesh/export_obj.h>
+
 #include <math.h>
 #include <cstdlib>
 
@@ -21,6 +33,14 @@ using namespace cv;
 using namespace std;
 using namespace MeshReconstruction;
 using namespace std::chrono;
+
+class MyFace;
+class MyVertex;
+
+struct MyUsedTypes : public vcg::UsedTypes<	vcg::Use<MyVertex>::AsVertexType, vcg::Use<MyFace>::AsFaceType>{};
+class MyVertex  : public vcg::Vertex< MyUsedTypes, vcg::vertex::VFAdj, vcg::vertex::Coord3f, vcg::vertex::Normal3f, vcg::vertex::BitFlags  >{};
+class MyFace    : public vcg::Face  < MyUsedTypes, vcg::face::VFAdj, vcg::face::Normal3f, vcg::face::VertexRef, vcg::face::BitFlags > {};
+class MyMesh : public vcg::tri::TriMesh<vector<MyVertex>, vector<MyFace> > {};
 
 Vec3f voxel_number;
 int N = 8;			//how many cameras/views
@@ -1066,6 +1086,27 @@ int main() {
 			WriteObjFile(mesh, outputfilename);
 			cout << "NumVerts: " << ntri * 3 << " NumTri: " << ntri << endl;
 			printf("Output wrote in .obj file!\n");
+
+			MyMesh m;
+			int strlen = outputfilename.length();
+			char char_array[strlen+1];
+			strcpy(char_array, outputfilename.c_str());
+
+			int err = vcg::tri::io::Importer<MyMesh>::Open(m,char_array);
+			int dup = vcg::tri::Clean<MyMesh>::RemoveDuplicateVertex(m);
+			int unref = vcg::tri::Clean<MyMesh>::RemoveUnreferencedVertex(m);
+			vcg::tri::UpdateTopology<MyMesh>::VertexFace(m);
+			vcg::tri::Allocator<MyMesh>::CompactVertexVector(m);
+			//vcg::tri::Smooth::VertexCoordLaplacian(m,3);
+			//vcg::tri::io::ExporterPLY<MyMesh>::Save(m,"out.ply");
+
+
+			//vcg::tri::UpdateNormal<MyMesh>::PerFaceNormalized(m);
+			//vcg::tri::Smooth<MyMesh>::VertexCoordPasoDoble(m,2,0,10.05);
+			vcg::tri::Smooth<MyMesh>::VertexCoordLaplacian(m,2,false,0);
+
+			vcg::tri::io::ExporterOBJ<MyMesh>::Save(m,char_array,10);
+
 		}
 
 
