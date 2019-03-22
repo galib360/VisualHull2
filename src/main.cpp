@@ -23,14 +23,16 @@ using namespace MeshReconstruction;
 using namespace std::chrono;
 
 Vec3f voxel_number;
-int N = 10;			//how many cameras/views
-int F = 201;			//number of frames
-int startFrame = 167;
+int N = 8;			//how many cameras/views
+int F = 28;		//number of frames
+int startFrame = 0;
 int dim[3];
 int decPoint = 1/.01;
-int vnormal = 0;	// 1 for per vertex normal calculation, 0 for per triangle
+int vnormal = 1;	// 1 for per vertex normal calculation, 0 for per triangle
 float isoscaler = 0.925;
 Vec3f voxel_size;
+int fps = 60;
+int givenParam = 0; // 1 for given M, 0 for given K and Rt
 
 ////for bounding box computation
 
@@ -201,12 +203,12 @@ vector<Plane> cameraPlanes;
 vector<Point> midpoints;
 
 
-float xmin = 100;
-float xmax = -100;
-float ymin = 100;
-float ymax = -100;
-float zmin = 100;
-float zmax = -100;
+float xmin = 1000;
+float xmax = -1000;
+float ymin = 1000;
+float ymax = -1000;
+float zmin = 1000;
+float zmax = -1000;
 
 int main() {
 
@@ -240,19 +242,35 @@ int main() {
 
 		for (int countView = 0; countView < N; countView++) {
 
-			//cv::String path("data/cam0" + to_string(countView) + "/*.pbm");
+			//for dancer
+//			cv::String path("data/cam0" + to_string(countView) + "/");
+//			String fn = to_string(countFrame) + ".pbm";
+
+			//for child
 			cv::String path;
 			if (countView<10){
 				//path = "children/cam0" + to_string(countView) + "/*.png";
-				path = "children/cam0" + to_string(countView) + "/";
+				path = "danwalk2/cam0" + to_string(countView) + "/";
 			}
 			else if(countView>=10){
 				//path = "children/cam" + to_string(countView) + "/*.png";
-				path = "children/cam" + to_string(countView) + "/";
+				path = "danwalk2/cam" + to_string(countView) + "/";
 			}
+			String fn = to_string(countFrame) + ".png";
+
+			//for martial
+//			cv::String path;
+//			if (countView < 10) {
+//				//path = "children/cam0" + to_string(countView) + "/*.png";
+//				path = "martial/cam0" + to_string(countView) + "/";
+//			} else if (countView >= 10) {
+//				//path = "children/cam" + to_string(countView) + "/*.png";
+//				path = "martial/cam" + to_string(countView) + "/";
+//			}
+//			String fn = to_string(countFrame) + ".png";
 
 			//cout << path << endl;
-			String fn = to_string(countFrame) + ".png";
+
 			//cv::glob(path, fn, true); // recurse
 
 			//cv::Mat im = cv::imread(fn[countFrame]);
@@ -365,14 +383,30 @@ int main() {
 
 			vector<string> fid;
 
+
+			//for dancer
 //			std::ifstream txtfile(
 //					"data/cam0" + to_string(countView) + "/cam_par.txt");
+
+			//for child
 			std::ifstream txtfile;
 			if (countView < 10) {
-				txtfile = ifstream("children/cam0" + to_string(countView)+ "/cam_par.txt");
+				txtfile = ifstream("danwalk2/cam0" + to_string(countView)+ "/cam_par.txt");
 			} else if (countView >= 10) {
-				txtfile = ifstream("children/cam" + to_string(countView)+ "/cam_par.txt");
+				txtfile = ifstream("danwalk2/cam" + to_string(countView)+ "/cam_par.txt");
 			}
+
+			//for martial
+//			std::ifstream txtfile;
+//			if (countView < 10) {
+//				txtfile = ifstream(
+//						"martial/cam0" + to_string(countView)
+//								+ "/cam0"+to_string(countView)+".txt");
+//			} else if (countView >= 10) {
+//				txtfile = ifstream(
+//						"martial/cam" + to_string(countView) + "/cam"+to_string(countView)+".txt");
+//			}
+
 			//cout << "data/cam0" + to_string(countView) + "/cam_par.txt" << endl;
 			//std::ifstream txtfile("templeSR/templeSR_par.txt");
 			std::string line;
@@ -396,60 +430,144 @@ int main() {
 					//cout<<val<<endl;
 				}
 			}
-			while (i < linedata.size()) {
-				fid.push_back(linedata[i]);
-				i++;
 
-				Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
-				for (int j = 0; j < 3; j++) {
-					for (int k = 0; k < 4; k++) {
-						float temp = strtof((linedata[i]).c_str(), 0);
+			if (givenParam == 1) {
+				while (i < linedata.size()) {
+					fid.push_back(linedata[i]);
+					i++;
 
-						P.at<float>(j, k) = temp;
-						i++;
+					Mat P(3, 4, cv::DataType<float>::type, Scalar(1));
+					for (int j = 0; j < 3; j++) {
+						for (int k = 0; k < 4; k++) {
+							float temp = strtof((linedata[i]).c_str(), 0);
+
+							P.at<float>(j, k) = temp;
+							i++;
+						}
 					}
+//					Mat P(4, 3, cv::DataType<float>::type, Scalar(1));
+//					for (int j = 0; j < 4; j++) {
+//						for (int k = 0; k < 3; k++) {
+//							float temp = strtof((linedata[i]).c_str(), 0);
+//
+//							P.at<float>(j, k) = temp;
+//							i++;
+//						}
+//					}
+//					P = P.t();
+
+					M.push_back(P);
+
+					Mat rotm, tvec, kk;
+					decomposeProjectionMatrix(P, kk, rotm, tvec);
+					K.push_back(kk);
+					//		cout << kk << endl << endl;
+					R.push_back(rotm);
+					Mat ttemp(3, 1, cv::DataType<float>::type, Scalar(1));
+					float temp4 = tvec.at<float>(3, 0);
+					ttemp.at<float>(0, 0) = tvec.at<float>(0, 0) / temp4;
+					ttemp.at<float>(1, 0) = tvec.at<float>(1, 0) / temp4;
+					ttemp.at<float>(2, 0) = tvec.at<float>(2, 0) / temp4;
+
+					t.push_back(ttemp);
+
+					//Mat cameraPosition = -R[i].t() * t[i];
+					Mat Rtrans = rotm.t();
+					Mat cameraPosition = ttemp;
+					//Mat Rtrans = rotm;
+
+					Vector3f cameraOrigin;
+					cameraOrigin.x = cameraPosition.at<float>(0, 0);
+					cameraOrigin.y = cameraPosition.at<float>(0, 1);
+					cameraOrigin.z = cameraPosition.at<float>(0, 2);
+
+					Vector3f planeNormal;
+					planeNormal.x = Rtrans.at<float>(0, 2);
+					planeNormal.y = Rtrans.at<float>(1, 2);
+					planeNormal.z = Rtrans.at<float>(2, 2);
+
+					Plane cameraPlane = ConstructFromPointNormal(cameraOrigin,
+							planeNormal);
+
+					cameraOrigins.push_back(cameraOrigin);
+					planeNormals.push_back(planeNormal);
+					cameraPlanes.push_back(cameraPlane);
+
+					//cout<<"camera"<<countView<<": "<<M[countView]<<endl;
+
 				}
-				M.push_back(P);
-
-				Mat rotm, tvec, kk;
-				decomposeProjectionMatrix(P, kk, rotm, tvec);
-				K.push_back(kk);
-				//		cout << kk << endl << endl;
-				R.push_back(rotm);
-				Mat ttemp(3, 1, cv::DataType<float>::type, Scalar(1));
-				float temp4 = tvec.at<float>(3, 0);
-				ttemp.at<float>(0, 0) = tvec.at<float>(0, 0) / temp4;
-				ttemp.at<float>(1, 0) = tvec.at<float>(1, 0) / temp4;
-				ttemp.at<float>(2, 0) = tvec.at<float>(2, 0) / temp4;
-
-				t.push_back(ttemp);
-
-				//Mat cameraPosition = -R[i].t() * t[i];
-				Mat Rtrans = rotm.t();
-				Mat cameraPosition = ttemp;
-				//Mat Rtrans = rotm;
-
-				Vector3f cameraOrigin;
-				cameraOrigin.x = cameraPosition.at<float>(0, 0);
-				cameraOrigin.y = cameraPosition.at<float>(0, 1);
-				cameraOrigin.z = cameraPosition.at<float>(0, 2);
-
-				Vector3f planeNormal;
-				planeNormal.x = Rtrans.at<float>(0, 2);
-				planeNormal.y = Rtrans.at<float>(1, 2);
-				planeNormal.z = Rtrans.at<float>(2, 2);
-
-				Plane cameraPlane = ConstructFromPointNormal(cameraOrigin,
-						planeNormal);
-
-				cameraOrigins.push_back(cameraOrigin);
-				planeNormals.push_back(planeNormal);
-				cameraPlanes.push_back(cameraPlane);
-
-				//cout<<"camera"<<countView<<": "<<M[countView]<<endl;
-
 			}
 
+			else if (givenParam == 0) {
+				while (i < linedata.size()) {
+					fid.push_back(linedata[i]);
+					i++;
+					//Put data into K
+					Mat kk(3, 3, cv::DataType<float>::type, Scalar(1));
+					Mat rotm(3, 3, cv::DataType<float>::type, Scalar(1));
+					Mat tvec(3, 1, cv::DataType<float>::type, Scalar(1));
+					for (int j = 0; j < 3; j++) {
+						for (int k = 0; k < 3; k++) {
+							float temp = strtof((linedata[i]).c_str(), 0);
+
+							kk.at<float>(j, k) = temp;
+							i++;
+						}
+					}
+					//kk = kk.t();
+					K.push_back(kk);
+
+					Mat Rttemp(3, 4, cv::DataType<float>::type, Scalar(1));
+					for (int j = 0; j < 3; j++) {
+						for (int k = 0; k < 3; k++) {
+							float temp = strtof((linedata[i]).c_str(), 0);
+
+							Rttemp.at<float>(j, k) = temp;
+							rotm.at<float>(j, k) = temp;
+							i++;
+						}
+					}
+					rotm = rotm.t();
+					R.push_back(rotm);
+					int k = 3;
+					for (int j = 0; j < 3; j++) {
+						float temp = strtof((linedata[i]).c_str(), 0);
+						Rttemp.at<float>(j, k) = temp;
+						tvec.at<float>(j, 0) = temp;
+						i++;
+					}
+					//Rttemp = Rttemp.t();
+					Rt.push_back(Rttemp);
+					t.push_back(tvec);
+
+				}
+
+				// Compute M's
+				//for (int i = countView; i < countView+1; i++) {
+					Mat Mtemp = K[countView] * Rt[countView];
+					M.push_back(Mtemp);
+					Mat Rtrans = R[countView].t();
+					Mat cameraPosition = t[countView];
+
+					Vector3f cameraOrigin;
+					cameraOrigin.x = cameraPosition.at<float>(0, 0);
+					cameraOrigin.y = cameraPosition.at<float>(0, 1);
+					cameraOrigin.z = cameraPosition.at<float>(0, 2);
+
+					Vector3f planeNormal;
+					planeNormal.x = Rtrans.at<float>(0, 2);
+					planeNormal.y = Rtrans.at<float>(1, 2);
+					planeNormal.z = Rtrans.at<float>(2, 2);
+
+					Plane cameraPlane = ConstructFromPointNormal(cameraOrigin,
+							planeNormal);
+
+					cameraOrigins.push_back(cameraOrigin);
+					planeNormals.push_back(planeNormal);
+					cameraPlanes.push_back(cameraPlane);
+
+				//}
+			}
 		}
 
 		//Read Camera Params from text file ***************************************************
@@ -464,6 +582,15 @@ int main() {
 //		float ymax = -100;
 //		float zmin = 100;
 //		float zmax = -100;
+
+		if (countFrame % fps == 0) {
+			xmin = 1000;
+			xmax = -1000;
+			ymin = 1000;
+			ymax = -1000;
+			zmin = 1000;
+			zmax = -1000;
+		}
 
 		for (int a = 0; a < N - 1; a++) {
 
@@ -992,7 +1119,7 @@ int main() {
 
 	high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
-	auto durationms = duration_cast<microseconds>( t2 - t1 ).count();
+	auto durationms = duration_cast<milliseconds>( t2 - t1 ).count();
 	auto durations = duration_cast<seconds>( t2 - t1 ).count();
 	cout <<"Total code execution time: " <<durationms<<" ms"<<endl;
 	cout <<"Total code execution time: " <<durations<<" sec"<<endl;
